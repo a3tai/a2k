@@ -30,18 +30,21 @@ Install from source (Node.js >= 24 and git required):
 curl -fsSL https://a3t.app/install.sh | bash
 ```
 
-The `a3t` CLI validates manifests, shows the directory-aware project context, plans reviewable client bootstrap configuration, and provides a direnv-style shell hook:
+The `a3t` CLI validates manifests, shows the directory-aware project context, plans reviewable client bootstrap configuration, provides a direnv-style shell hook, and supports Hub identity state:
 
 ```bash
 a3t context          # nearest validated .a2k/manifest.yaml, walking up from $PWD
 a3t validate         # validate a manifest
 a3t bootstrap --target claude-code --target pi  # review native files and note approvalDigest
 a3t bootstrap --target claude-code --target pi --write sha256:<reviewed-digest>
+a3t login            # OAuth device flow against id.a3t.dev
+a3t use https://a3t.ai/a2k/projects/example
+a3t status --json    # never emits access or refresh tokens
 eval "$(a3t hook zsh)"   # in ~/.zshrc: exports A2K_* metadata on directory change
 ```
 
 The hook exports metadata only (project id, name, kind, classification, paths); the variables are named `A2K_*` because they carry protocol context.
-It never executes manifest content and never emits secrets.
+It never executes manifest content and never emits secrets. Hub tokens and the default project are stored in a private `~/.a3t/state.json`; set `A3T_HOME` only when an isolated state directory is required.
 For a complete collaborator setup, including the shell hook, manifest verification, review-first agent configuration, and safe verification, follow [`ONBOARDING.md`](ONBOARDING.md).
 
 The broader product surface (central Hub, setup mode, signed defaults registry, desktop app) is defined in [RFC 0001](docs/rfcs/0001-product-surface.md), with the full design in [`docs/design/product-architecture.md`](docs/design/product-architecture.md) and the build-out sequence in [`docs/design/implementation-plan.md`](docs/design/implementation-plan.md).
