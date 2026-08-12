@@ -36,7 +36,7 @@ Non-goals:
 |---|---|---|
 | `a3t` CLI | `packages/cli` | validate, inspect context, plan bootstrap, shell hook, auth, project selection |
 | Shell integration | emitted by `a3t hook` | direnv-style directory-aware environment for agents |
-| A2K Hub | `hub/` (future) | multi-tenant knowledge control plane |
+| A2K Hub | composed from existing core services (extended business-service + extracted registry) | multi-tenant knowledge control plane |
 | Desktop app | `apps/desktop` (future) | tray icon, settings, project selector |
 | Defaults registry | Hub subsystem | signed bundles of shared agents, skills, and connectors |
 
@@ -75,14 +75,14 @@ After that, entering any checkout of a project repository gives agents the right
 
 ### Signed defaults registry
 
-Shared agents, skills, and connectors are distributed as content-addressed bundles signed with Sigstore/cosign, following the Kingpin plugin model.
+Shared agents, skills, and connectors are distributed as content-addressed `.kpkg` bundles signed with Ed25519 per the `a3t-sdk`/Kingpin model, hardened as specified in the product architecture (file-digest coverage, fail-closed trust policy, trust-key set, publish-time verification).
 The Hub verifies signatures on publish; the CLI verifies again on install.
 Unsigned or tampered bundles fail closed.
 Organizations can pin trusted publishers and require review before a bundle version becomes the org default.
 
 ### Desktop application
 
-A small Tauri app (MIT/Apache dependencies only) providing a tray icon, login state, a project selector that switches the active context, and settings.
+A small Wails app (Go + Svelte 5, reusing the existing A3T design system) providing a tray icon, login state, a project selector that switches the active context, and settings.
 It is a thin client over the same local CLI state and Hub APIs; it owns no logic of its own.
 
 ### Distribution
@@ -114,7 +114,7 @@ The bin moves from `@a2k/validator` to `@a3t/cli`; the validator remains a libra
 
 ## Alternatives considered
 
-- Electron for the desktop app: heavier, no capability gain over Tauri for a tray-and-settings app.
+- Electron or Tauri for the desktop app: three in-house Wails apps and a shared design system already exist; a fourth stack buys nothing.
 - Building session handoff in-house: Paperclip is MIT, active, and adapter-friendly; forking preemptively duplicates maintenance.
 - Env-file secrets in the shell hook (direnv style): rejected; secrets stay brokered and short-lived.
 - Closed-source Hub: rejected; the spec only matters if the reference service is inspectable and self-hostable.
@@ -133,5 +133,6 @@ Resolved since the first draft (see the product architecture): Zikra namespaces 
 
 Still open:
 
-- Exact Keto relation-tuple design for classification-conditioned grants.
+- Exact Keto relation-tuple design for classification-conditioned grants (direction: adopt core's declared OPL hierarchy; core ADR 0002 deferred this).
 - Paperclip adapter surface once its plugin API stabilizes.
+- Whether the tray app merges into the existing `a3tai/desktop` Wails app or ships standalone sharing its `a3tai://` scheme and keychain slots.

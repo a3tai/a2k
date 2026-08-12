@@ -26,33 +26,43 @@ The [spec-level architecture](architecture.md) defines the planes; this document
 Git repositories remain the reviewed documentation authority.
 The Hub is a control plane and access plane over them, never a second source of truth.
 
+## Guiding stance: connect, don't reinvent
+
+The estate survey in [ecosystem-context.md](ecosystem-context.md) found most of the Hub already running inside the core platform.
+The Hub is therefore a composition layer: it gives existing services one identity, one authorization model, one MCP surface, and one setup flow, and only writes new code where nothing exists (the `projects` entity, A2K manifest awareness, defaults resolution).
+Every decision below prefers extending a running service over starting a sibling.
+
 ## Implementation decisions
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Hub language | Go, single binary | matches A3T production services, static deploys, one-binary self-host |
-| CLI end state | Go, same repo as Hub code, identical command surface to the P0 TypeScript CLI | no interpreter startup in the shell hook; cosign-signed release artifacts |
+| Hub construction | compose existing core services: extend `services/business` with projects + A2K ingestion + the `a2k://` MCP surface; extract `core/internal/registry` into the defaults registry service its README already plans; front both at `hub.a3t.app` | business-service is ~80% of the Hub (immutable revisions, visibility, outbox, MCP); a fresh Hub would be reinvention |
+| Hub language | Go, reusing `core/pkg/{server,config,auth,authz}` | house harness; three-way authn and Keto checks come free |
+| Open-core path | spec, schemas, TS SDK, and CLI are open now; the self-host reference Hub is extracted from the settled core services later, with `a3t-sdk` as the extraction vehicle | extraction after the shape settles beats maintaining a parallel OSS twin from day one |
+| CLI end state | Go, identical command surface to the P0 TypeScript CLI | no interpreter startup in the shell hook; release artifacts cosign-signed (rapid's pipeline as the template) |
 | TypeScript packages | remain the protocol reference SDK (validator, bootstrap, adapter-sdk) on npm | ecosystem needs an embeddable validator; the spec stays implementation-backed |
-| Desktop | Tauri, shells out to the CLI for all state | no daemon and no second implementation of anything |
-| System of record | Postgres | boring, fits RDS and docker compose alike |
+| Desktop | Wails (Go + Svelte 5), reusing the A3T design system and Wails skills; shells out to the CLI for all state | three prior in-house Wails apps and an existing design system; Tauri would be a fourth stack. Consolidation with the existing `a3tai/desktop` app (which owns the `a3tai://` scheme) is an open product decision |
+| System of record | Postgres, shared core migrations path | boring; business-service already took this route |
 | Index and memory | Zikra (namespace per project) | governed team memory already built; MIT |
 | Code structure knowledge | codebase-memory-mcp per repository | already in daily use |
-| AuthN | Kratos (humans), Hydra (OAuth2: device flow for CLI, client credentials for service agents, token exchange for on-behalf-of) | existing a3t-auth stack |
-| AuthZ | Keto relation tuples, checked only in Hub middleware | single enforcement point; clients never filter |
-| Bundle signing | Sigstore/cosign, content-addressed artifacts | Kingpin model, fail closed |
-| Session handoff | Paperclip adapter (MIT) | active upstream; fork only on divergence |
+| AuthN | Kratos (humans), Hydra (OAuth2: device flow for CLI, client credentials for service agents, token exchange for on-behalf-of); clients seeded by script since DCR is disabled | existing a3t-auth stack, consent-server already mints tenant/roles claims |
+| AuthZ | Keto via `core/pkg/authz`, checked only in Hub middleware; the project entity becomes the first real consumer of the declared OPL hierarchy | single enforcement point; ADR 0002 in core explicitly deferred this reconciliation |
+| Bundle signing | Ed25519 `.kpkg` (the `a3t-sdk`/Kingpin line), hardened per the current Kingpin tree: canonical file-digest bundle signature, fail-closed trust policy, re-verify at execution, trust-key set with key IDs and validity windows, publish-time verification | this is the signing system that actually exists and runs; a Sigstore migration can layer a transparency log later without changing the artifact |
+| Session handoff | Paperclip adapter (MIT), plus read adapters to the PM tools already in use | active upstream; fork only on divergence |
 
 ## Hub
 
 ### Data model (Postgres)
 
+`organizations`, `teams`, and `team_memberships` already exist in core (`migrations/005_organizations.sql`) and are reused, not duplicated; the rows below marked new are the Hub's additions.
+
 | Table | Purpose |
 |---|---|
-| `organizations` | tenant root; billing and policy anchor |
-| `teams` | grouping within an org |
+| `organizations` | tenant root; billing and policy anchor (existing) |
+| `teams` | grouping within an org (existing) |
 | `memberships` | principal-to-org/team with role and classification ceiling |
 | `principals` | humans, agents, and service accounts; agents link to an owning human or team and a Hydra client |
-| `projects` | maps 1:1 to an A2K ProjectBootstrap manifest id |
+| `projects` | maps 1:1 to an A2K ProjectBootstrap manifest id (new; the one genuinely new entity) |
 | `sources` | git repos and adapter endpoints feeding a project |
 | `documents` | metadata + provenance for each knowledge object: source ref, revision, digest, kind (adr, rfc, runbook, facts, doc), classification |
 | `bundles` / `bundle_versions` | defaults registry: content-addressed, signed versions with publisher identity |
@@ -105,14 +115,23 @@ Transport is streamable HTTP with OAuth; the stdio `packages/mcp-server` remains
 
 ### Defaults registry and setup
 
-A bundle is a tar.gz with a `manifest.json` naming each artifact (agent configs, skills, connectors, MCP client settings), its sha256, and its target path semantics.
-Bundle versions are content-addressed and cosign-signed; the Hub verifies on publish, the CLI verifies on install, and unsigned or tampered bundles fail closed.
+The defaults registry is the extraction of `core/services/core/internal/registry` (catalog, immutable versions, S3 bundle store, approve/disable lifecycle, per-tenant installs) that its own README already plans.
+Artifacts stay `.kpkg` bundles per `a3t-sdk` (`a3t.plugin.yaml`, `a3t.dev/v1`), extended with `runtime.type: skill` so shared skills ride the same signed pipeline that plugins and agents do; A2K catalog records are the descriptors, pointing at bundles via `spec.artifact{uri, digest}`.
+Signing is Ed25519 with the hardening the current Kingpin tree proved out, closing the known gaps:
+
+- the signature covers a canonical file-digest list, not just the manifest (fixes the `a3t-sdk` content-integrity gap);
+- the registry verifies signatures at publish and derives trust from the verifying key, never from a self-declared author field;
+- stored bundle digests are re-checked on download and at execution, not write-and-display;
+- the trust store is a set of keys with IDs and validity windows, not one env-var root;
+- unknown trust values and missing verifiers reject; declared capabilities either map to an enforced control or are removed.
+
 Resolution for `a3t setup` is org defaults, then team, then project, then principal overrides, deep-merged in that order.
 The output is a bootstrap plan in the same reviewable shape `@a2k/bootstrap` emits today: the user sees the complete diff before anything is written.
+Server-side Core may auto-install `is_core` plugins into its own sandboxed runtime; developer machines are a different trust domain and `a3t setup` never auto-installs anything there.
 
 ### Secret broker
 
-The Hub stores bindings, not secrets: provider (1Password Connect, Vault, AWS Secrets Manager), item reference, and the scope that may read it.
+The Hub stores bindings, not secrets: provider (1Password Connect, Vault, AWS Secrets Manager), item reference, and the scope that may read it, following Kingpin's `vault-credential:<uuid>` reference pattern with sanitize-before-read.
 A granted client exchanges its access token for a short-lived provider credential at use time.
 Secrets never appear in manifests (validator-enforced), bundles, shell exports, or Hub storage.
 
@@ -130,9 +149,9 @@ Existing project management stays connected read-only through the Linear/Jira/Gi
 
 ## Deployment
 
-Hosted: `hub.a3t.app` in the `a3t-hub` namespace on the existing EKS clusters (namespace-per-product), RDS Postgres, the shared Ory stack in `a3t-auth`, and a managed Zikra deployment; delivery via Flux like every other A3T service.
-Self-hosted: one `docker compose up` with hub, Postgres, and Zikra; Ory images optional when the org brings its own OIDC.
-The Hub binary is identical in both.
+Hosted: `hub.a3t.app` routes to the composed core services (extended business service and the extracted defaults registry) in the `a3t-hub` namespace on the existing EKS clusters (namespace-per-product), RDS Postgres, the shared Ory stack in `a3t-auth`, and a managed Zikra deployment; delivery via Flux like every other A3T service, ingress via the existing Cloudflare Tunnel.
+The first ingested knowledge source is `a3tai/docs`, the estate's live A2K OrganizationHub.
+Self-hosted: one `docker compose up` with the hub services, Postgres, and Zikra; Ory images optional when the org brings its own OIDC (core's compose stack is the template).
 
 ## Trust boundaries and failure posture
 

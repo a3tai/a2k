@@ -53,6 +53,7 @@ The broader product surface (central Hub, setup mode, signed defaults registry, 
 - [`docs/design/architecture.md`](docs/design/architecture.md) — architecture overview
 - [`docs/design/product-architecture.md`](docs/design/product-architecture.md) — a3t product system design
 - [`docs/design/implementation-plan.md`](docs/design/implementation-plan.md) — phased build-out plan
+- [`docs/design/ecosystem-context.md`](docs/design/ecosystem-context.md) — what the estate already provides and what a3t reuses
 - [`docs/landscape.md`](docs/landscape.md) — standards and adapter landscape
 - [`docs/roadmap.md`](docs/roadmap.md) — staged implementation roadmap
 - [`SECURITY.md`](SECURITY.md) — security policy and threat boundaries
