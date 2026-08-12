@@ -1,0 +1,16 @@
+$schema: https://a3t.ai/a2k/schemas/v0.1/manifest.schema.json
+apiVersion: a2k.a3t.ai/v0alpha1
+kind: ProjectBootstrap
+metadata:
+  id: https://a3t.ai/a2k/projects/a2k
+  name: a2k
+  title: A2K protocol and a3t CLI
+  owners:
+    - https://github.com/a3tai/a2k
+  classification: internal
+spec:
+  roots: []
+  profiles: [core, bootstrap]
+  policy:
+    remoteFetch: disabled
+    mutation: proposal
