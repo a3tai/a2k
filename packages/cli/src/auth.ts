@@ -109,7 +109,6 @@ function discoveryURLForIssuer(issuer: URL): URL {
 }
 
 function normalizedInterval(value: unknown): number {
-  if (value === undefined) return 5;
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw new Error("device authorization returned an invalid polling interval");
   }
@@ -196,7 +195,7 @@ export async function beginDeviceLogin(options: DeviceLoginOptions = {}): Promis
     ? undefined
     : sameOriginEndpoint(device.verification_uri_complete, issuer, "complete verification URI");
   const expiresIn = Math.max(1, Math.min(device.expires_in, 3600));
-  const interval = normalizedInterval(device.interval);
+  const interval = normalizedInterval(device.interval ?? 5);
   return {
     issuer: issuer.toString(),
     clientId,
