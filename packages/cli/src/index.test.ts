@@ -101,8 +101,8 @@ test("shellExports emits quoted metadata and unsets on null", async () => {
 test("hook scripts register exactly once per shell", () => {
   const zsh = hookScript("zsh");
   assert.match(zsh, /chpwd_functions/);
-  assert.match(zsh, /a2k export/);
+  assert.match(zsh, /a3t export/);
   const bash = hookScript("bash");
   assert.match(bash, /PROMPT_COMMAND/);
-  assert.match(bash, /_a2k_hook\*\)/);
+  assert.match(bash, /_a3t_hook\*\)/);
 });

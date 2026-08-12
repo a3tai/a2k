@@ -1,16 +1,17 @@
 #!/bin/sh
-# A2K installer. Served at https://a2k.a3t.ai/install.sh
-# Installs the a2k CLI from source into $A2K_HOME and links a wrapper into $A2K_BIN_DIR.
+# a3t installer. Served at https://a3t.app/install.sh
+# Installs the a3t CLI (the A3T tool speaking the A2K knowledge protocol)
+# from source into $A3T_HOME and links a wrapper into $A3T_BIN_DIR.
 # ponytail: source install until prebuilt binaries ship (RFC 0001, product track P3).
 set -eu
 
-REPO_URL="${A2K_REPO_URL:-https://github.com/a3tai/a2k.git}"
-A2K_HOME="${A2K_HOME:-$HOME/.a2k}"
-A2K_BIN_DIR="${A2K_BIN_DIR:-$HOME/.local/bin}"
-SRC_DIR="$A2K_HOME/src"
+REPO_URL="${A3T_REPO_URL:-https://github.com/a3tai/a2k.git}"
+A3T_HOME="${A3T_HOME:-$HOME/.a3t}"
+A3T_BIN_DIR="${A3T_BIN_DIR:-$HOME/.local/bin}"
+SRC_DIR="$A3T_HOME/src"
 
 fail() {
-  echo "a2k install: $1" >&2
+  echo "a3t install: $1" >&2
   exit 1
 }
 
@@ -27,7 +28,7 @@ if [ -d "$SRC_DIR/.git" ]; then
   git -C "$SRC_DIR" reset --hard origin/main
 else
   echo "Cloning $REPO_URL into $SRC_DIR"
-  mkdir -p "$A2K_HOME"
+  mkdir -p "$A3T_HOME"
   git clone --depth 1 "$REPO_URL" "$SRC_DIR"
 fi
 
@@ -36,20 +37,20 @@ cd "$SRC_DIR"
 npm ci --ignore-scripts --no-audit --no-fund
 npm run build
 
-mkdir -p "$A2K_BIN_DIR"
-cat >"$A2K_BIN_DIR/a2k" <<WRAPPER
+mkdir -p "$A3T_BIN_DIR"
+cat >"$A3T_BIN_DIR/a3t" <<WRAPPER
 #!/bin/sh
 exec node "$SRC_DIR/packages/cli/dist/cli.js" "\$@"
 WRAPPER
-chmod +x "$A2K_BIN_DIR/a2k"
+chmod +x "$A3T_BIN_DIR/a3t"
 
 echo
-echo "Installed a2k to $A2K_BIN_DIR/a2k"
+echo "Installed a3t to $A3T_BIN_DIR/a3t"
 case ":$PATH:" in
-  *":$A2K_BIN_DIR:"*) ;;
-  *) echo "Add $A2K_BIN_DIR to your PATH." ;;
+  *":$A3T_BIN_DIR:"*) ;;
+  *) echo "Add $A3T_BIN_DIR to your PATH." ;;
 esac
 echo
 echo "Enable directory-aware context by adding one line to your shell rc file:"
-echo '  zsh:  eval "$(a2k hook zsh)"'
-echo '  bash: eval "$(a2k hook bash)"'
+echo '  zsh:  eval "$(a3t hook zsh)"'
+echo '  bash: eval "$(a3t hook bash)"'

@@ -1,5 +1,5 @@
 {
-  "name": "@a2k/cli",
+  "name": "@a3t/cli",
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
@@ -7,7 +7,7 @@
   "exports": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "a2k": "./dist/cli.js"
+    "a3t": "./dist/cli.js"
   },
   "dependencies": {
     "@a2k/bootstrap": "*",

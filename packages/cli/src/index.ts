@@ -104,32 +104,33 @@ export function shellExports(context: A2kContext | null): string {
 
 export type HookShell = "zsh" | "bash";
 
+// The tool is a3t; the A2K_* variables carry A2K protocol context.
 export function hookScript(shell: HookShell): string {
   if (shell === "zsh") {
     return [
-      `_a2k_hook() {`,
-      `  eval "$(a2k export 2>/dev/null)"`,
+      `_a3t_hook() {`,
+      `  eval "$(a3t export 2>/dev/null)"`,
       `}`,
       `typeset -ag chpwd_functions`,
-      `if [[ -z "\${chpwd_functions[(r)_a2k_hook]}" ]]; then`,
-      `  chpwd_functions+=(_a2k_hook)`,
+      `if [[ -z "\${chpwd_functions[(r)_a3t_hook]}" ]]; then`,
+      `  chpwd_functions+=(_a3t_hook)`,
       `fi`,
-      `_a2k_hook`,
+      `_a3t_hook`,
       ``,
     ].join("\n");
   }
   return [
-    `_a2k_hook() {`,
-    `  if [ "\${_A2K_LAST_PWD:-}" != "$PWD" ]; then`,
-    `    _A2K_LAST_PWD="$PWD"`,
-    `    eval "$(a2k export 2>/dev/null)"`,
+    `_a3t_hook() {`,
+    `  if [ "\${_A3T_LAST_PWD:-}" != "$PWD" ]; then`,
+    `    _A3T_LAST_PWD="$PWD"`,
+    `    eval "$(a3t export 2>/dev/null)"`,
     `  fi`,
     `}`,
     `case "\${PROMPT_COMMAND:-}" in`,
-    `  *_a2k_hook*) ;;`,
-    `  *) PROMPT_COMMAND="_a2k_hook\${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ;;`,
+    `  *_a3t_hook*) ;;`,
+    `  *) PROMPT_COMMAND="_a3t_hook\${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ;;`,
     `esac`,
-    `_a2k_hook`,
+    `_a3t_hook`,
     ``,
   ].join("\n");
 }

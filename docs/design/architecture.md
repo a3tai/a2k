@@ -42,3 +42,5 @@ Agents may draft and propose. The governing source system decides whether a chan
 ## Deployment boundaries
 
 The repository core works offline. A conforming organization may add an MCP service, identity provider, policy engine, search/index layer, and external adapters. Public descriptors contain logical identity and safe references; environment bindings and secret-provider configuration remain private or local.
+
+The running-system design for the a3t product built on this architecture is in [product-architecture.md](product-architecture.md).

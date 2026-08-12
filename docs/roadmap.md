@@ -47,26 +47,26 @@ The product track, defined in [RFC 0001](rfcs/0001-product-surface.md), ships th
 
 ## Product track
 
-### P0 — CLI and shell integration
+### P0 - CLI and shell integration
 
-- `a2k` CLI: validate, context, bootstrap planning, shell hook, metadata exports;
+- `a3t` CLI: validate, context, bootstrap planning, shell hook, metadata exports;
 - `install.sh` source install;
 - review-first local mutation only.
 
-### P1 — Hub read path
+### P1 - Hub read path
 
 - Hub service with organizations, teams, projects, and principals;
 - OIDC login and OAuth device flow for the CLI;
 - read-only remote MCP context server with Keto-enforced grants at the MCP boundary;
 - Zikra indexing of Hub documents into per-project namespaces.
 
-### P2 — setup mode and signed registry
+### P2 - setup mode and signed registry
 
-- `a2k login`, `a2k use`, and `a2k setup` with reviewable defaults bundles;
+- `a3t login`, `a3t use`, and `a3t setup` with reviewable defaults bundles;
 - Sigstore/cosign bundle signing, publisher pinning, fail-closed verification;
 - brokered short-lived secrets, never in manifests or shell history.
 
-### P3 — desktop and handoff
+### P3 - desktop and handoff
 
 - Tauri tray app: login state, project selector, settings;
 - Paperclip adapter for session handoff;

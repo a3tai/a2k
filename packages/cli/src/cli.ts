@@ -20,14 +20,16 @@ import {
   type HookShell,
 } from "./index.js";
 
-const USAGE = `Usage: a2k <command>
+const USAGE = `Usage: a3t <command>
+
+a3t is the A3T tool; it speaks the A2K knowledge protocol.
 
 Commands:
   validate [path]                    Validate a manifest (default: ${A2K_MANIFEST_PATH})
   context [--json]                   Show the manifest context for the current directory
   bootstrap [--target <t>] [--write] Plan client configuration (targets: claude-code, codex)
   export                             Emit shell exports for the current context
-  hook <zsh|bash>                    Emit the shell hook (add 'eval "$(a2k hook zsh)"' to your rc file)
+  hook <zsh|bash>                    Emit the shell hook (add 'eval "$(a3t hook zsh)"' to your rc file)
 `;
 
 async function cmdValidate(args: string[]): Promise<number> {
@@ -157,7 +159,7 @@ async function cmdExport(): Promise<number> {
   }
   process.stdout.write(shellExports(null));
   if (result.dir !== null) {
-    console.error(`a2k: invalid manifest in ${result.dir}; context cleared`);
+    console.error(`a3t: invalid manifest in ${result.dir}; context cleared`);
   }
   return 0;
 }
@@ -165,7 +167,7 @@ async function cmdExport(): Promise<number> {
 function cmdHook(args: string[]): number {
   const shell = args[0];
   if (shell !== "zsh" && shell !== "bash") {
-    console.error("Usage: a2k hook <zsh|bash>");
+    console.error("Usage: a3t hook <zsh|bash>");
     return 2;
   }
   process.stdout.write(hookScript(shell satisfies HookShell));
