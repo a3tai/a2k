@@ -158,6 +158,39 @@ a3t owns no agent runtime; it treats every agent as a client to configure throug
 
 Knowledge connection is declarative: a source named in the manifest (git repo, docs hub, PM tool, chat archive) is ingested, indexed, and vectorized by the Hub pipeline into Zikra automatically; "connect it" is the only user verb, and search is one MCP tool regardless of where the knowledge lives.
 
+## Contexts and connectors
+
+These two abstractions are how the hand-built estate generalizes into a service.
+
+### Connector
+
+A connector is the productized form of "the Linear integration": one declared integration with an external system, defined once and materialized everywhere.
+It is a catalog entry (an `a3t.plugin.yaml` with `category: connector`, reusing the existing manifest contract) carrying:
+
+- a **configSchema** split by level: org-level ("we use Linear"), context-level ("this project uses workspace X, team Y");
+- a **credential binding** (`vault-credential` style reference into the secret broker, never a value);
+- one or more **surfaces**: an MCP server definition for agents, an ingestion adapter feeding the knowledge plane (Linear issues become document references), and optionally webhooks.
+
+Declaring a connector at the org level makes it available; configuring it at the context level makes it live; the per-agent writers materialize it into every installed agent's native config.
+The estate's six-way duplication (the same MCP server set declared in six syntaxes across six files) collapses into six connector entries with credential bindings, emitted by `a3t setup`.
+
+### Context
+
+A context is a `(principal, project)` pair resolved into a complete working environment:
+
+| Slice | Resolved to |
+|---|---|
+| Knowledge | the project's sources, index namespace, and facts |
+| Connectors | the project's configured integrations with the principal's credentials |
+| Agents and skills | the defaults bundles that apply at org, team, project, principal |
+| Work loop | the project's Research/Plan/Work/Review/Publish bindings |
+| Policy | classification ceiling, egress rules, approval channel |
+
+Selection is directory-first: entering a checkout selects that project's context via the shell hook, so two terminals in two repos are two live contexts concurrently, with no global mutation and no mode switch.
+`a3t use <project>` sets the default context for non-repo work and for the tray app.
+Materialization respects scope: repo-plan files are per-checkout, environment is per-session, and the few inherently machine-global files (for example Windsurf's user config) are the only shared state, written through the reviewed machine plan.
+Isolation follows from brokered credentials: an agent working in project A resolves project A's Linear workspace and tokens and cannot reach project B's, because the broker resolves by context grant, not by machine.
+
 ## The work loop
 
 Work moves through five phases: **Research, Plan, Work, Review, Publish**.
