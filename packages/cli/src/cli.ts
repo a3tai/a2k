@@ -12,6 +12,13 @@ import {
 
 import { writeBootstrapPlan } from "./bootstrap-write.js";
 import {
+  beginDeviceLogin,
+  loadState,
+  pollDeviceLogin,
+  saveActiveProject,
+  statusFromState,
+} from "./auth.js";
+import {
   hookScript,
   loadContext,
   shellExports,
@@ -27,6 +34,9 @@ Commands:
   validate [path]                    Validate a manifest (default: ${A2K_MANIFEST_PATH})
   context [--json]                   Show the manifest context for the current directory
   bootstrap [--target <t>] [--write <digest>] Plan or apply client configuration (targets: claude-code, opencode, pi, codex, vscode, cursor)
+  login [--issuer <https-url>]       Sign in through the OAuth device flow
+  use <project-id>                   Select the default project for non-repository work
+  status [--json]                    Show login and default-project status
   export                             Emit shell exports for the current context
   hook <zsh|bash>                    Emit the shell hook (add 'eval "$(a3t hook zsh)"' to your rc file)
 `;
@@ -168,6 +178,71 @@ async function cmdBootstrap(args: string[]): Promise<number> {
   return 0;
 }
 
+async function cmdLogin(args: string[]): Promise<number> {
+  let issuer: string | undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] !== "--issuer" || issuer !== undefined) {
+      console.error("Usage: a3t login [--issuer <https-url>]");
+      return 2;
+    }
+    issuer = args[index + 1];
+    index += 1;
+    if (issuer === undefined) {
+      console.error("--issuer requires an HTTPS URL");
+      return 2;
+    }
+  }
+  try {
+    const pending = await beginDeviceLogin(issuer === undefined ? {} : { issuer });
+    console.log(`Open: ${pending.verificationUriComplete ?? pending.verificationUri}`);
+    console.log(`Code: ${pending.userCode}`);
+    console.log("Waiting for authorization...");
+    await pollDeviceLogin(pending);
+    console.log("Login complete.");
+    return 0;
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : "Login failed");
+    return 1;
+  }
+}
+
+async function cmdUse(args: string[]): Promise<number> {
+  if (args.length !== 1) {
+    console.error("Usage: a3t use <project-id>");
+    return 2;
+  }
+  try {
+    await saveActiveProject(args[0]!);
+    console.log(`Default project: ${args[0]}`);
+    return 0;
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : "Project selection failed");
+    return 1;
+  }
+}
+
+async function cmdStatus(args: string[]): Promise<number> {
+  if (args.some((arg) => arg !== "--json") || args.filter((arg) => arg === "--json").length > 1) {
+    console.error("Usage: a3t status [--json]");
+    return 2;
+  }
+  try {
+    const status = statusFromState(await loadState());
+    if (args.includes("--json")) {
+      process.stdout.write(`${JSON.stringify(status, null, 2)}\n`);
+    } else {
+      console.log(`authenticated: ${status.authenticated ? "yes" : "no"}`);
+      console.log(`issuer:        ${status.issuer ?? "-"}`);
+      console.log(`expires:       ${status.expiresAt ?? "-"}`);
+      console.log(`project:       ${status.project ?? "-"}`);
+    }
+    return status.authenticated ? 0 : 1;
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : "Status unavailable");
+    return 1;
+  }
+}
+
 async function cmdExport(): Promise<number> {
   const result = await loadContext(process.cwd());
   if (result.ok) {
@@ -200,6 +275,12 @@ async function main(): Promise<number> {
       return cmdContext(args);
     case "bootstrap":
       return cmdBootstrap(args);
+    case "login":
+      return cmdLogin(args);
+    case "use":
+      return cmdUse(args);
+    case "status":
+      return cmdStatus(args);
     case "export":
       return cmdExport();
     case "hook":
