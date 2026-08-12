@@ -344,7 +344,7 @@ async function processInstanceIdentity(pid: number): Promise<string | undefined>
   if (process.platform === "linux") {
     try {
       const stat = await readFile(`/proc/${pid}/stat`, "utf8");
-      const fields = stat.slice(stat.lastIndexOf(")") + 1).trim().split(/\\s+/);
+      const fields = stat.slice(stat.lastIndexOf(")") + 1).trim().split(/\s+/);
       return fields[19];
     } catch {
       return undefined;

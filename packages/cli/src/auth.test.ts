@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { lstat, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+
+const execFileAsync = promisify(execFile);
 
 import {
   beginDeviceLogin,
@@ -218,6 +222,33 @@ test("state updates recover a stale lock left by a terminated process", async ()
     await saveActiveProject("https://a3t.ai/a2k/projects/docs", stateDir);
     const state = await loadState(stateDir);
     assert.equal(state.activeProject, "https://a3t.ai/a2k/projects/docs");
+  });
+});
+
+test("live and unsafe state locks are never reclaimed", async () => {
+  await withStateDir(async (stateDir) => {
+    const lockPath = join(stateDir, "state.json.lock");
+    const ownerIdentity = process.platform === "darwin"
+      ? (await execFileAsync("ps", ["-o", "lstart=", "-p", String(process.pid)])).stdout.trim()
+      : undefined;
+    await mkdir(lockPath, { mode: 0o700 });
+    await writeFile(join(lockPath, "owner.json"), JSON.stringify({
+      pid: process.pid,
+      createdAt: Date.now() - 60_000,
+      ...(ownerIdentity === undefined ? {} : { instanceIdentity: ownerIdentity }),
+    }), "utf8");
+    await assert.rejects(saveActiveProject("https://a3t.ai/a2k/projects/live", stateDir), /EEXIST|timed out/);
+    assert.equal((await stat(lockPath)).isDirectory(), true);
+
+    await rm(lockPath, { recursive: true });
+    await symlink(join(stateDir, "target"), lockPath);
+    await assert.rejects(saveActiveProject("https://a3t.ai/a2k/projects/symlink", stateDir), /state lock/);
+    assert.equal((await lstat(lockPath)).isSymbolicLink(), true);
+
+    await rm(lockPath);
+    await writeFile(lockPath, "not a directory", "utf8");
+    await assert.rejects(saveActiveProject("https://a3t.ai/a2k/projects/file", stateDir), /state lock/);
+    assert.equal((await lstat(lockPath)).isFile(), true);
   });
 });
 
