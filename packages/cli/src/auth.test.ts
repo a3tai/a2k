@@ -82,6 +82,78 @@ test("device login discovers endpoints and stores refreshed credentials privatel
   });
 });
 
+test("issuer path is placed after the OIDC discovery well-known path", async () => {
+  const requests: string[] = [];
+  const fetch: FetchLike = async (input) => {
+    const url = String(input);
+    requests.push(url);
+    if (url === "https://id.example.com/.well-known/openid-configuration/realms/a3t") {
+      return response(200, {
+        issuer: "https://id.example.com/realms/a3t",
+        device_authorization_endpoint: "https://id.example.com/realms/a3t/oauth2/device",
+        token_endpoint: "https://id.example.com/realms/a3t/oauth2/token",
+      });
+    }
+    return response(200, {
+      device_code: "device",
+      user_code: "CODE",
+      verification_uri: "https://id.example.com/realms/a3t/verify",
+      expires_in: 60,
+    });
+  };
+
+  const pending = await beginDeviceLogin({ issuer: "https://id.example.com/realms/a3t", fetch });
+  assert.equal(requests[0], "https://id.example.com/.well-known/openid-configuration/realms/a3t");
+  assert.equal(pending.issuer, "https://id.example.com/realms/a3t/");
+});
+
+test("invalid polling intervals are rejected before authorization_pending can sleep", async () => {
+  let requests = 0;
+  await assert.rejects(
+    pollDeviceLogin({
+      issuer: "https://id.a3t.dev/",
+      clientId: "a3t-hub",
+      tokenEndpoint: "https://id.a3t.dev/oauth2/token",
+      deviceCode: "device-secret",
+      userCode: "CODE",
+      verificationUri: "https://id.a3t.dev/oauth2/device/verify",
+      expiresAt: Date.now() + 60_000,
+      intervalSeconds: Number.NaN,
+    }, {
+      fetch: async () => {
+        requests += 1;
+        return response(400, { error: "authorization_pending" });
+      },
+    }),
+    /invalid polling interval/,
+  );
+  assert.equal(requests, 0);
+});
+
+test("concurrent state updates preserve authentication and project selection", async () => {
+  await withStateDir(async (stateDir) => {
+    await Promise.all([
+      saveActiveProject("https://a3t.ai/a2k/projects/docs", stateDir),
+      pollDeviceLogin({
+        issuer: "https://id.a3t.dev/",
+        clientId: "a3t-hub",
+        tokenEndpoint: "https://id.a3t.dev/oauth2/token",
+        deviceCode: "device-secret",
+        userCode: "CODE",
+        verificationUri: "https://id.a3t.dev/oauth2/device/verify",
+        expiresAt: Date.now() + 60_000,
+        intervalSeconds: 1,
+      }, {
+        stateDir,
+        fetch: async () => response(200, { access_token: "access", token_type: "bearer", expires_in: 30 }),
+      }),
+    ]);
+    const state = await loadState(stateDir);
+    assert.equal(state.activeProject, "https://a3t.ai/a2k/projects/docs");
+    assert.equal(state.auth?.accessToken, "access");
+  });
+});
+
 test("device polling handles pending and slow_down without leaking token errors", async () => {
   await withStateDir(async (stateDir) => {
     const waits: number[] = [];

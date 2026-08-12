@@ -8,6 +8,8 @@ const STATE_FILENAME = "state.json";
 const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
 const MAX_RESPONSE_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MS = 15_000;
+const STATE_LOCK_TIMEOUT_MS = 10_000;
+const STATE_LOCK_RETRY_MS = 25;
 
 export type FetchLike = typeof fetch;
 
@@ -94,6 +96,22 @@ function normalizedHttpsURL(value: string, label: string): URL {
   return parsed;
 }
 
+function discoveryURLForIssuer(issuer: URL): URL {
+  const issuerPath = issuer.pathname.replace(/^\/+|\/+$/g, "");
+  const discoveryPath = issuerPath
+    ? `/.well-known/openid-configuration/${issuerPath}`
+    : "/.well-known/openid-configuration";
+  return new URL(discoveryPath, issuer.origin);
+}
+
+function normalizedInterval(value: unknown): number {
+  if (value === undefined) return 5;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error("device authorization returned an invalid polling interval");
+  }
+  return Math.max(1, Math.min(value, 60));
+}
+
 function sameOriginEndpoint(value: string, issuer: URL, label: string): string {
   const endpoint = normalizedHttpsURL(value, label);
   if (endpoint.origin !== issuer.origin) {
@@ -139,11 +157,10 @@ function requestSignal(deadline = Date.now() + REQUEST_TIMEOUT_MS): AbortSignal 
 export async function beginDeviceLogin(options: DeviceLoginOptions = {}): Promise<PendingDeviceLogin> {
   const fetcher = options.fetch ?? fetch;
   const issuer = normalizedHttpsURL(options.issuer ?? process.env.A3T_ISSUER ?? DEFAULT_ISSUER, "issuer");
+  const discoveryURL = discoveryURLForIssuer(issuer);
   if (!issuer.pathname.endsWith("/")) issuer.pathname += "/";
   const clientId = options.clientId ?? process.env.A3T_CLIENT_ID ?? DEFAULT_CLIENT_ID;
   if (!/^[A-Za-z0-9._~-]{1,128}$/.test(clientId)) throw new Error("invalid OAuth client id");
-
-  const discoveryURL = new URL(".well-known/openid-configuration", issuer);
   const discoveryResponse = await fetcher(discoveryURL, {
     redirect: "error",
     signal: requestSignal(),
@@ -152,6 +169,7 @@ export async function beginDeviceLogin(options: DeviceLoginOptions = {}): Promis
   if (!discoveryResponse.ok) throw new Error(`identity discovery failed (${discoveryResponse.status})`);
   const discovery = await jsonResponse<DiscoveryDocument>(discoveryResponse, "identity discovery");
   const discoveredIssuer = normalizedHttpsURL(discovery.issuer, "discovered issuer");
+  if (!discoveredIssuer.pathname.endsWith("/")) discoveredIssuer.pathname += "/";
   if (discoveredIssuer.toString() !== issuer.toString()) throw new Error("identity discovery issuer mismatch");
   const deviceEndpoint = sameOriginEndpoint(discovery.device_authorization_endpoint, issuer, "device authorization endpoint");
   const tokenEndpoint = sameOriginEndpoint(discovery.token_endpoint, issuer, "token endpoint");
@@ -174,7 +192,7 @@ export async function beginDeviceLogin(options: DeviceLoginOptions = {}): Promis
     ? undefined
     : sameOriginEndpoint(device.verification_uri_complete, issuer, "complete verification URI");
   const expiresIn = Math.max(1, Math.min(device.expires_in, 3600));
-  const interval = Math.max(0, Math.min(device.interval ?? 5, 60));
+  const interval = normalizedInterval(device.interval);
   return {
     issuer: issuer.toString(),
     clientId,
@@ -192,7 +210,7 @@ export async function pollDeviceLogin(pending: PendingDeviceLogin, options: Poll
   const fetcher = options.fetch ?? fetch;
   const sleep = options.sleep ?? ((milliseconds: number) => new Promise<void>((done) => setTimeout(done, milliseconds)));
   const now = options.now ?? Date.now;
-  let interval = Math.max(1, Math.min(pending.intervalSeconds, 60));
+  let interval = normalizedInterval(pending.intervalSeconds);
 
   while (now() < pending.expiresAt) {
     const body = new URLSearchParams({
@@ -222,8 +240,7 @@ export async function pollDeviceLogin(pending: PendingDeviceLogin, options: Poll
         expiresAt: now() + Math.max(1, token.expires_in) * 1000,
         scope: token.scope ?? "",
       };
-      const current = await loadState(options.stateDir);
-      await writeState({ ...current, auth }, options.stateDir);
+      await updateState(options.stateDir, (current) => ({ ...current, auth }));
       return auth;
     }
     const error = "error" in payload ? payload.error : undefined;
@@ -272,7 +289,7 @@ export async function loadState(stateDir = defaultStateDir()): Promise<CliState>
   }
 }
 
-async function writeState(state: CliState, stateDir = defaultStateDir()): Promise<void> {
+async function ensureStateDirectory(stateDir: string): Promise<string> {
   const path = statePath(stateDir);
   const directory = dirname(path);
   await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -281,6 +298,12 @@ async function writeState(state: CliState, stateDir = defaultStateDir()): Promis
     throw new Error("a3t state directory must be a regular directory");
   }
   await chmod(directory, 0o700);
+  return path;
+}
+
+async function writeState(state: CliState, stateDir = defaultStateDir()): Promise<void> {
+  const path = await ensureStateDirectory(stateDir);
+  const directory = dirname(path);
   try {
     const existing = await lstat(path);
     if (!existing.isFile() || existing.isSymbolicLink()) throw new Error("a3t state must be a regular file");
@@ -304,10 +327,35 @@ async function writeState(state: CliState, stateDir = defaultStateDir()): Promis
   }
 }
 
+async function updateState(
+  stateDir = defaultStateDir(),
+  update: (state: CliState) => CliState | Promise<CliState>,
+): Promise<CliState> {
+  const path = await ensureStateDirectory(stateDir);
+  const lockPath = `${path}.lock`;
+  const deadline = Date.now() + STATE_LOCK_TIMEOUT_MS;
+  for (;;) {
+    try {
+      await mkdir(lockPath, { mode: 0o700 });
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST" || Date.now() >= deadline) throw error;
+      await new Promise<void>((done) => setTimeout(done, STATE_LOCK_RETRY_MS));
+    }
+  }
+  try {
+    const current = await loadState(stateDir);
+    const next = await update(current);
+    await writeState(next, stateDir);
+    return next;
+  } finally {
+    await rm(lockPath, { recursive: true, force: true });
+  }
+}
+
 export async function saveActiveProject(project: string, stateDir = defaultStateDir()): Promise<void> {
   const id = normalizedHttpsURL(project, "project id").toString();
-  const state = await loadState(stateDir);
-  await writeState({ ...state, activeProject: id }, stateDir);
+  await updateState(stateDir, (state) => ({ ...state, activeProject: id }));
 }
 
 export function statusFromState(state: CliState, now = Date.now()): PublicStatus {
