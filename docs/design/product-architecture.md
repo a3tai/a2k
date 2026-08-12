@@ -147,6 +147,33 @@ Existing project management stays connected read-only through the Linear/Jira/Gi
 - `a3t bootstrap` and `a3t setup` write only reviewable output under `.a2k/generated/` or user-approved config paths.
 - The desktop tray app renders CLI state and Hub status; every action it offers is a CLI command.
 
+## Editor integration
+
+The same connect-don't-reinvent stance: editors get the Hub through their native MCP clients, and the a3t extension is a thin adapter over the CLI, never a second implementation.
+(Survey of the Aug 2026 editor landscape: VS Code MCP has been GA since 1.102 with a stable `McpServerDefinitionProvider` API; VS Code, Cursor, Claude Code, and Windsurf all speak streamable HTTP with spec OAuth.)
+
+The load-bearing decision: the Hub MCP endpoint implements the MCP authorization spec fully - RFC 9728 protected-resource metadata, RFC 8414 auth-server metadata, and RFC 7591 dynamic client registration on Hydra.
+Then every editor authenticates with its built-in OAuth flow and zero a3t client code, and per-user grants land at the Keto-checked middleware exactly as designed.
+Hydra currently runs with DCR disabled platform-wide; enabling it is a deliberate, scoped change for MCP client registration only, with anonymous DCR clients constrained to the Hub audience.
+The CLI's device flow remains for terminal and REST use.
+
+One internal server model, four config carriers, emitted by the bootstrap planner:
+
+| Editor | File | Envelope | Plan |
+|---|---|---|---|
+| VS Code | `.vscode/mcp.json` | `servers`, `"type": "http"` | repo plan |
+| Claude Code | `.mcp.json` | `mcpServers`, `"type": "http"` | repo plan |
+| Cursor | `.cursor/mcp.json` | `mcpServers`, `url` | repo plan |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` | `mcpServers`, `serverUrl` | machine plan (`a3t setup`), merge by server name |
+
+All four point at the same Hub URL with the project carried in a static header; static values only (env-expansion syntax diverges across editors), and never a secret in any file.
+
+The VS Code extension (also running unmodified in Cursor and Windsurf via Open VSX) does exactly: status bar showing project id, classification, and login state from `a3t status --json`; an `McpServerDefinitionProvider` registering the Hub (feature-detected so forks fall back to the emitted file); terminal env injection of `A2K_*` via `EnvironmentVariableCollection` (the direnv-extension pattern, composing with the shell hook); command wrappers for login, setup (plan shown as a diff first), and validate; a getting-started walkthrough; workspace-trust gating for anything that executes.
+The CLI grows `--json` output modes and stays the owner of tokens, validation, verification, and setup; the extension stores nothing and does not bundle the CLI (detect and offer install instead).
+
+Publishing: the extension dual-publishes to the VS Code Marketplace and Open VSX under the same ID with a3t.app publisher verification; the Hub MCP server is listed in the official MCP registry under a DNS-verified `app.a3t/*` namespace, which cascades to the GitHub MCP registry and VS Code's in-product gallery; a dev container Feature (`ghcr.io/a3tai/features/a3t`) installs the cosign-verified CLI and seeds the extension for devcontainer/Codespaces onboarding; self-hosted orgs point VS Code and Windsurf enterprise registry settings at their own Hub.
+Skipped deliberately: Copilot chat participants and LM tools (VS Code plus Copilot only; MCP is the cross-editor surface), extension-side token brokering, and bundling the CLI in the VSIX.
+
 ## Deployment
 
 Hosted: `hub.a3t.app` routes to the composed core services (extended business service and the extracted defaults registry) in the `a3t-hub` namespace on the existing EKS clusters (namespace-per-product), RDS Postgres, the shared Ory stack in `a3t-auth`, and a managed Zikra deployment; delivery via Flux like every other A3T service, ingress via the existing Cloudflare Tunnel.

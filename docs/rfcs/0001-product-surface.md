@@ -20,7 +20,7 @@ This RFC specifies the running system that makes the specification usable end to
 
 ## Scope and non-goals
 
-In scope: the `a3t` CLI, shell integration, the Hub service and its identity/authorization model, the defaults registry, the desktop application, session handoff, and distribution channels.
+In scope: the `a3t` CLI, shell integration, the Hub service and its identity/authorization model, the defaults registry, the desktop application, editor integration (VS Code, Cursor, Claude Code, Windsurf), session handoff, and distribution channels.
 
 Non-goals:
 
@@ -38,6 +38,7 @@ Non-goals:
 | Shell integration | emitted by `a3t hook` | direnv-style directory-aware environment for agents |
 | A2K Hub | composed from existing core services (extended business-service + extracted registry) | multi-tenant knowledge control plane |
 | Desktop app | `apps/desktop` (future) | tray icon, settings, project selector |
+| Editor extension | thin VS Code extension, also on Open VSX for Cursor/Windsurf | status bar context, MCP registration, terminal env, CLI command wrappers |
 | Defaults registry | Hub subsystem | signed bundles of shared agents, skills, and connectors |
 
 ### CLI and shell integration
@@ -91,6 +92,7 @@ It is a thin client over the same local CLI state and Hub APIs; it owns no logic
 - Homebrew tap `a3tai/tap/a3t`.
 - npm `@a3t/cli` for Node users.
 - Single static binary is the target for v0.2 so the shell hook has no interpreter startup cost.
+- Editor extension on the VS Code Marketplace and Open VSX; Hub MCP server in the official MCP registry; a dev container Feature for devcontainer/Codespaces onboarding.
 
 ### Open-core boundary
 

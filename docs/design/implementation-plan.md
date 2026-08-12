@@ -32,7 +32,7 @@ Workstreams, in dependency order:
 2. **Identity**: seed an `a3t-hub` Hydra client (script pattern from `seed-admin-oauth-client.sh`; DCR is disabled), device-flow for `a3t login`, audience checks; agent principals via client credentials and token exchange.
 3. **Authorization**: adopt the declared Keto OPL hierarchy for org/team/project (the first real consumer; closes core ADR 0002's deferral), classification-ceiling check, single authz middleware shared by REST and MCP, deny-by-default tests.
 4. **Ingest**: `a3tai/docs` (the live OrganizationHub) as the first source, git polling, validator-gated document storage with provenance, Zikra indexing into per-project namespaces.
-5. **MCP read surface**: `search_knowledge`, `get_document`, `list_projects`, and `a2k://` document resources on the business-service MCP server.
+5. **MCP read surface**: `search_knowledge`, `get_document`, `list_projects`, and `a2k://` document resources on the business-service MCP server; spec-compliant authorization (RFC 9728 + 8414 + scoped DCR on Hydra) so editor MCP clients authenticate with zero a3t client code.
 6. **CLI**: `a3t login`, `a3t use <project>`, `a3t status`; token store under `~/.a3t`.
 7. **Deploy**: `a3t-hub` namespace on dev (ambient-mesh label, hand-maintained kustomization list, ExternalSecret whose AWS key is seeded BEFORE merge), Flux delivery, compose entries for local parity.
 
@@ -45,7 +45,8 @@ Exit: on a fresh laptop, `a3t login && a3t use <project>` then an MCP-configured
 3. **Setup**: `a3t setup` resolving org -> team -> project -> principal defaults into a reviewable bootstrap plan; approval writes agent configs, skills, connectors, and MCP client settings.
 4. **Facts**: `facts` document kind schema, ingest validation, `get_facts` MCP tool, `x-facts` profile documented.
 5. **Secret broker**: `secret_bindings`, 1Password Connect first (matches current ops), token exchange for short-lived credentials, `a3t secrets list`.
-6. **Onboarding pilot**: run a real A3T project and one external tester through install -> login -> use -> setup; feeds spec Milestone 4.
+6. **Editors**: bootstrap planner emits `.vscode/mcp.json`, `.mcp.json`, and `.cursor/mcp.json` in the repo plan and the Windsurf user-global merge in the machine plan; CLI grows `--json` outputs; thin VS Code extension (status bar, MCP definition provider with fork guards, terminal env injection, command wrappers, walkthrough) dual-published to the Marketplace and Open VSX.
+7. **Onboarding pilot**: run a real A3T project and one external tester through install -> login -> use -> setup across terminal plus one editor; feeds spec Milestone 4.
 
 Exit: a new machine reaches a fully configured, governed agent environment with exactly `install.sh`, `a3t login`, `a3t use`, `a3t setup`, with every local change reviewed before write.
 
@@ -55,6 +56,7 @@ Exit: a new machine reaches a fully configured, governed agent environment with 
 2. **Releases**: goreleaser with cosign-signed artifacts (rapid's release workflow as the template), `install.sh` switches to binary download with checksum verification, Homebrew tap `a3tai/tap/a3t`.
 3. **Desktop**: Wails tray app (A3T design system) rendering CLI state: login, project selector, Hub status, settings; resolve consolidation with the existing `a3tai/desktop` app and share its `a3tai://` scheme and keychain slots.
 4. **Handoff**: Paperclip adapter, `handoff_links`, `a3t handoff`; Linear/Jira/GitHub read adapters mapping issues into document references.
+5. **Discovery surfaces**: Hub MCP server listed in the official MCP registry (DNS-verified `app.a3t/*` namespace, cascading to the GitHub registry and VS Code's gallery); dev container Feature `ghcr.io/a3tai/features/a3t`.
 
 Exit: `brew install a3tai/tap/a3t`, tray shows the active project, and a session handed off from one machine resumes on another through Paperclip.
 
