@@ -147,6 +147,33 @@ Existing project management stays connected read-only through the Linear/Jira/Gi
 - `a3t bootstrap` and `a3t setup` write only reviewable output under `.a2k/generated/` or user-approved config paths.
 - The desktop tray app renders CLI state and Hub status; every action it offers is a CLI command.
 
+## Any-agent surface
+
+The product promise is agent-agnostic: install a3t, and whatever coder the user runs (Claude Code, Codex, OpenCode, Gemini CLI, OpenClaw, Paperclip agents, the next one) just works.
+a3t owns no agent runtime; it treats every agent as a client to configure through three universal channels, in order of preference:
+
+1. **MCP**: the Hub endpoint serves any MCP-capable client; for clients that only speak stdio, `a3t mcp` is a local bridge to the same surface.
+2. **Generated config**: the bootstrap planner detects installed agents and emits each one's native config from one internal model, exactly as it does for editors. Every writer is an adapter (`claude-code`, `codex`, `opencode`, `gemini`, `openclaw`, ...); adding an agent is adding a writer, never a protocol change.
+3. **Environment**: the `A2K_*` variables from the shell hook are the floor; an agent that reads nothing else still knows the project, classification, and manifest path.
+
+Knowledge connection is declarative: a source named in the manifest (git repo, docs hub, PM tool, chat archive) is ingested, indexed, and vectorized by the Hub pipeline into Zikra automatically; "connect it" is the only user verb, and search is one MCP tool regardless of where the knowledge lives.
+
+## The work loop
+
+Work moves through five phases: **Research, Plan, Work, Review, Publish**.
+The loop is understood generically by the protocol and specifically by each project:
+
+| Phase | Generic (protocol) | Specific (per-project binding) |
+|---|---|---|
+| Research | read surface: `search_knowledge`, `get_document`, `get_facts` | which sources and indexes are in scope |
+| Plan | draft a typed proposal (RFC/ADR/design shapes from the spec's contribution semantics) | the project's templates and where plans live |
+| Work | an agent session with full context: manifest, exports, MCP, handoff links | repo conventions, worktree rules, task tracker |
+| Review | typed proposal review: approve, reject, request changes; complete-diff review for anything touching a machine | who reviews, required gates (CI, code review) |
+| Publish | source-system commit or receipt; indexes rebuild as derived evidence | merge target, deploy pipeline, announcement channel |
+
+Generic semantics are already the spec's knowledge-change flow; the specific bindings are declared per project in the manifest (an `x-workflow` extension until the spec adopts a workflow profile) so any agent can ask "what does Review mean here?" and get an answer from the same MCP surface it uses for everything else.
+Session handoff (Paperclip) carries the current phase with the context, so work resumes mid-loop on another machine or agent.
+
 ## Editor integration
 
 The same connect-don't-reinvent stance: editors get the Hub through their native MCP clients, and the a3t extension is a thin adapter over the CLI, never a second implementation.

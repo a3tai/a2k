@@ -45,8 +45,9 @@ Exit: on a fresh laptop, `a3t login && a3t use <project>` then an MCP-configured
 3. **Setup**: `a3t setup` resolving org -> team -> project -> principal defaults into a reviewable bootstrap plan; approval writes agent configs, skills, connectors, and MCP client settings.
 4. **Facts**: `facts` document kind schema, ingest validation, `get_facts` MCP tool, `x-facts` profile documented.
 5. **Secret broker**: `secret_bindings`, 1Password Connect first (matches current ops), token exchange for short-lived credentials, `a3t secrets list`.
-6. **Editors**: bootstrap planner emits `.vscode/mcp.json`, `.mcp.json`, and `.cursor/mcp.json` in the repo plan and the Windsurf user-global merge in the machine plan; CLI grows `--json` outputs; thin VS Code extension (status bar, MCP definition provider with fork guards, terminal env injection, command wrappers, walkthrough) dual-published to the Marketplace and Open VSX.
-7. **Onboarding pilot**: run a real A3T project and one external tester through install -> login -> use -> setup across terminal plus one editor; feeds spec Milestone 4.
+6. **Editors and agents**: bootstrap planner emits `.vscode/mcp.json`, `.mcp.json`, and `.cursor/mcp.json` in the repo plan and the Windsurf user-global merge in the machine plan; agent detection plus config writers for Codex, OpenCode, Gemini CLI, and OpenClaw; `a3t mcp` stdio bridge for clients without HTTP MCP; CLI grows `--json` outputs; thin VS Code extension (status bar, MCP definition provider with fork guards, terminal env injection, command wrappers, walkthrough) dual-published to the Marketplace and Open VSX.
+7. **Work loop bindings**: `x-workflow` manifest extension declaring per-project Research/Plan/Work/Review/Publish bindings, served over MCP so any agent can ask what each phase means in this project.
+8. **Onboarding pilot**: run a real A3T project and one external tester through install -> login -> use -> setup across terminal plus one editor and two different agents; feeds spec Milestone 4.
 
 Exit: a new machine reaches a fully configured, governed agent environment with exactly `install.sh`, `a3t login`, `a3t use`, `a3t setup`, with every local change reviewed before write.
 

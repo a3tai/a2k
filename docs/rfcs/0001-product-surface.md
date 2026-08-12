@@ -8,6 +8,7 @@
 This RFC defines the product surface built on the A2K specification.
 A2K names the knowledge protocol; the product and its CLI are named `a3t`: a command-line tool with directory-aware shell integration, a central multi-tenant service called the A2K Hub, a desktop tray application, and a signed defaults registry.
 The goal is that a new person at a company can install one tool, sign in once, select a project, and have their agents connected to governed organizational knowledge with correct access controls.
+The surface is agent-agnostic: any coder (Claude Code, Codex, OpenCode, Gemini, OpenClaw, ...) works automatically via MCP, generated native config, or environment metadata, and work moves through one loop the whole system understands: Research, Plan, Work, Review, Publish.
 The specification, schemas, CLI, server, and desktop application are open source under MIT.
 A3T operates a paid hosted Hub at `hub.a3t.app`; self-hosting is a first-class supported path.
 
