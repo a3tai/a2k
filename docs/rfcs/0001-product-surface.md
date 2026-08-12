@@ -46,7 +46,7 @@ Non-goals:
 
 The CLI is the only local mutation path and it stays review-first.
 `a3t context` finds the nearest `.a2k/manifest.yaml` by walking up from the working directory, validates it, and reports the resolved project context.
-`a3t bootstrap` wraps the existing `@a2k/bootstrap` planner and writes proposed client configurations under `.a2k/generated/` only when asked; nothing is activated without the user wiring it in.
+`a3t bootstrap` wraps the existing `@a2k/bootstrap` planner and prints complete native client configurations plus a content digest for review. Only `--write <reviewed-digest>` creates those exact repository files, and it refuses to overwrite an existing client configuration.
 `a3t hook zsh|bash` emits a shell snippet, analogous to `direnv hook`, that re-exports `A2K_*` metadata variables when the working directory crosses a manifest boundary.
 Version 0 exports metadata only: project id, name, kind, classification, and manifest path.
 The hook never executes manifest content and never emits secrets; secret material arrives only later, brokered by the Hub as short-lived credentials, and never lands in the manifest or shell history.

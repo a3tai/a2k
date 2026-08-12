@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "context7": {
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "!op read 'op://Shared/LocalEnvironment/CONTEXT7_API_KEY'"
+      },
+      "approveTools": true
+    },
+    "linear": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@linear/mcp-server"
+      ],
+      "env": {
+        "LINEAR_API_KEY": "!op read 'op://Shared/LocalEnvironment/MCP/LINEAR_API_KEY'"
+      },
+      "approveTools": true
+    }
+  }
+}

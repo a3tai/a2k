@@ -46,6 +46,32 @@ export interface A2kReference {
   classification: Classification;
 }
 
+export interface A2kCredentialBinding {
+  env: string;
+  op: `op://${string}`;
+  scheme?: "bearer";
+}
+
+export type A2kMcpValue = string | A2kCredentialBinding;
+
+export type A2kMcpServer =
+  | {
+      transport: "stdio";
+      command: string;
+      args?: string[];
+      env?: Record<string, A2kMcpValue>;
+    }
+  | {
+      transport: "http";
+      url: string;
+      auth?: "oauth";
+      headers?: Record<string, A2kMcpValue>;
+    };
+
+export interface A2kConnectors {
+  mcpServers: Record<string, A2kMcpServer>;
+}
+
 export interface A2kManifest {
   $schema?: string;
   apiVersion: typeof A2K_API_VERSION;
@@ -71,4 +97,5 @@ export interface A2kManifest {
       baseRevision?: string;
     };
   };
+  "x-connectors"?: A2kConnectors;
 }

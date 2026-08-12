@@ -54,6 +54,25 @@ function escapePointer(segment: string): string {
   return segment.replaceAll("~", "~0").replaceAll("/", "~1");
 }
 
+function isCredentialBinding(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const binding = value as Record<string, unknown>;
+  return typeof binding.env === "string" &&
+    typeof binding.op === "string" &&
+    binding.op.startsWith("op://");
+}
+
+function isConnectorValueMap(path: string): boolean {
+  return /^\/x-connectors\/mcpServers\/[^/]+\/(?:env|headers)$/.test(path);
+}
+
+function isConnectorHeaderMap(path: string): boolean {
+  return /^\/x-connectors\/mcpServers\/[^/]+\/headers$/.test(path);
+}
+
+const safeLiteralHeaders = new Set(["accept", "content-type", "x-a2k-project"]);
+const clientInterpolation = /\{(?:env|file):[^}]+\}|\$\{[^}]+\}|\$env:[A-Za-z_][A-Za-z0-9_]*/;
+
 function findUnsafeContent(value: unknown, path = ""): ValidationError[] {
   const errors: ValidationError[] = [];
   if (typeof value === "string") {
@@ -62,6 +81,16 @@ function findUnsafeContent(value: unknown, path = ""): ValidationError[] {
         code: "unsafe-content",
         path: path || "/",
         message: "Credential-like values are not allowed in A2K manifests",
+      });
+    }
+    if (
+      /^\/x-connectors\/mcpServers\/[^/]+\/(?:env|headers)\/[^/]+$/.test(path) &&
+      clientInterpolation.test(value)
+    ) {
+      errors.push({
+        code: "unsafe-content",
+        path,
+        message: "Client interpolation syntax is not allowed in connector literals",
       });
     }
     try {
@@ -109,11 +138,24 @@ function findUnsafeContent(value: unknown, path = ""): ValidationError[] {
   if (value && typeof value === "object") {
     for (const [key, item] of Object.entries(value)) {
       const itemPath = `${path}/${escapePointer(key)}`;
-      if (prohibitedKey.test(key)) {
+      const boundConnectorValue =
+        isConnectorValueMap(path) && isCredentialBinding(item);
+      if (prohibitedKey.test(key) && !boundConnectorValue) {
         errors.push({
           code: "unsafe-content",
           path: itemPath,
-          message: "Credential-bearing fields are not allowed in A2K manifests",
+          message: "Credential-bearing fields require an op:// binding in x-connectors",
+        });
+      }
+      if (
+        isConnectorHeaderMap(path) &&
+        typeof item === "string" &&
+        !safeLiteralHeaders.has(key.toLowerCase())
+      ) {
+        errors.push({
+          code: "unsafe-content",
+          path: itemPath,
+          message: "Connector headers require an op:// binding unless the header is allowlisted as non-sensitive",
         });
       }
       errors.push(...findUnsafeContent(item, itemPath));
