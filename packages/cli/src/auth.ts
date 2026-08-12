@@ -7,6 +7,7 @@ const DEFAULT_CLIENT_ID = "a3t-hub";
 const STATE_FILENAME = "state.json";
 const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
 const MAX_RESPONSE_BYTES = 64 * 1024;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export type FetchLike = typeof fetch;
 
@@ -104,15 +105,35 @@ function sameOriginEndpoint(value: string, issuer: URL, label: string): string {
 async function jsonResponse<T>(response: Response, label: string): Promise<T> {
   const declared = Number(response.headers.get("content-length") ?? "0");
   if (declared > MAX_RESPONSE_BYTES) throw new Error(`${label} response is too large`);
-  const text = await response.text();
-  if (Buffer.byteLength(text, "utf8") > MAX_RESPONSE_BYTES) {
-    throw new Error(`${label} response is too large`);
+  if (response.body === null) throw new Error(`${label} returned an empty body`);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let text = "";
+  try {
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      bytes += chunk.value.byteLength;
+      if (bytes > MAX_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw new Error(`${label} response is too large`);
+      }
+      text += decoder.decode(chunk.value, { stream: true });
+    }
+    text += decoder.decode();
+  } finally {
+    reader.releaseLock();
   }
   try {
     return JSON.parse(text) as T;
   } catch {
     throw new Error(`${label} returned invalid JSON`);
   }
+}
+
+function requestSignal(deadline = Date.now() + REQUEST_TIMEOUT_MS): AbortSignal {
+  return AbortSignal.timeout(Math.max(1, Math.min(REQUEST_TIMEOUT_MS, deadline - Date.now())));
 }
 
 export async function beginDeviceLogin(options: DeviceLoginOptions = {}): Promise<PendingDeviceLogin> {
@@ -123,7 +144,11 @@ export async function beginDeviceLogin(options: DeviceLoginOptions = {}): Promis
   if (!/^[A-Za-z0-9._~-]{1,128}$/.test(clientId)) throw new Error("invalid OAuth client id");
 
   const discoveryURL = new URL(".well-known/openid-configuration", issuer);
-  const discoveryResponse = await fetcher(discoveryURL, { headers: { accept: "application/json" } });
+  const discoveryResponse = await fetcher(discoveryURL, {
+    redirect: "error",
+    signal: requestSignal(),
+    headers: { accept: "application/json" },
+  });
   if (!discoveryResponse.ok) throw new Error(`identity discovery failed (${discoveryResponse.status})`);
   const discovery = await jsonResponse<DiscoveryDocument>(discoveryResponse, "identity discovery");
   const discoveredIssuer = normalizedHttpsURL(discovery.issuer, "discovered issuer");
@@ -134,6 +159,8 @@ export async function beginDeviceLogin(options: DeviceLoginOptions = {}): Promis
   const body = new URLSearchParams({ client_id: clientId, scope: "openid offline" });
   const deviceResponse = await fetcher(deviceEndpoint, {
     method: "POST",
+    redirect: "error",
+    signal: requestSignal(),
     headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded" },
     body,
   });
@@ -165,7 +192,7 @@ export async function pollDeviceLogin(pending: PendingDeviceLogin, options: Poll
   const fetcher = options.fetch ?? fetch;
   const sleep = options.sleep ?? ((milliseconds: number) => new Promise<void>((done) => setTimeout(done, milliseconds)));
   const now = options.now ?? Date.now;
-  let interval = Math.max(0, Math.min(pending.intervalSeconds, 60));
+  let interval = Math.max(1, Math.min(pending.intervalSeconds, 60));
 
   while (now() < pending.expiresAt) {
     const body = new URLSearchParams({
@@ -175,6 +202,8 @@ export async function pollDeviceLogin(pending: PendingDeviceLogin, options: Poll
     });
     const response = await fetcher(pending.tokenEndpoint, {
       method: "POST",
+      redirect: "error",
+      signal: requestSignal(pending.expiresAt),
       headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded" },
       body,
     });
@@ -227,6 +256,10 @@ export async function loadState(stateDir = defaultStateDir()): Promise<CliState>
     const path = statePath(stateDir);
     const info = await lstat(path);
     if (!info.isFile() || info.isSymbolicLink()) throw new Error("a3t state must be a regular file");
+    if ((info.mode & 0o077) !== 0) throw new Error("a3t state file permissions must be 0600");
+    if (typeof process.getuid === "function" && info.uid !== process.getuid()) {
+      throw new Error("a3t state file must be owned by the current user");
+    }
     const raw = await readFile(path, "utf8");
     const parsed = JSON.parse(raw) as Partial<CliState>;
     if (parsed.version !== 1) throw new Error("unsupported state version");

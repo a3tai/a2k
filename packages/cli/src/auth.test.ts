@@ -124,6 +124,16 @@ test("state writes reject a symlink destination", async () => {
   });
 });
 
+test("state reads reject permissive permissions", async () => {
+  await withStateDir(async (stateDir) => {
+    await saveActiveProject("https://a3t.ai/a2k/projects/docs", stateDir);
+    const path = join(stateDir, "state.json");
+    const { chmod } = await import("node:fs/promises");
+    await chmod(path, 0o644);
+    await assert.rejects(loadState(stateDir), /permissions must be 0600/);
+  });
+});
+
 test("project selection and status keep tokens out of public output", async () => {
   await withStateDir(async (stateDir) => {
     await saveActiveProject("https://a3t.ai/a2k/projects/docs", stateDir);
