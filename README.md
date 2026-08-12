@@ -21,6 +21,28 @@ A2K composes existing standards rather than replacing them. Git remains the revi
 
 Discovery is not trust, authorization, installation, or execution. A2K consumers must treat manifests, documents, remote references, adapter output, and model output as untrusted data. The reference implementation is read-only by default and produces proposed configuration changes for review rather than applying them.
 
+## The a3t CLI
+
+A2K names the protocol; `a3t` is the tool that speaks it.
+Install from source (Node.js >= 24 and git required):
+
+```bash
+curl -fsSL https://a3t.app/install.sh | bash
+```
+
+The `a3t` CLI validates manifests, shows the directory-aware project context, plans reviewable client bootstrap configuration, and provides a direnv-style shell hook:
+
+```bash
+a3t context          # nearest validated .a2k/manifest.yaml, walking up from $PWD
+a3t validate         # validate a manifest
+a3t bootstrap        # print a reviewable client-config plan (--write to emit under .a2k/generated/)
+eval "$(a3t hook zsh)"   # in ~/.zshrc: exports A2K_* metadata on directory change
+```
+
+The hook exports metadata only (project id, name, kind, classification, paths); the variables are named `A2K_*` because they carry protocol context.
+It never executes manifest content and never emits secrets.
+The broader product surface (central Hub, setup mode, signed defaults registry, desktop app) is defined in [RFC 0001](docs/rfcs/0001-product-surface.md), with the full design in [`docs/design/product-architecture.md`](docs/design/product-architecture.md) and the build-out sequence in [`docs/design/implementation-plan.md`](docs/design/implementation-plan.md).
+
 ## Repository map
 
 - [`spec/v0.1/`](spec/v0.1/) — draft normative specification
@@ -29,6 +51,9 @@ Discovery is not trust, authorization, installation, or execution. A2K consumers
 - [`examples/`](examples/) — non-normative examples
 - [`packages/`](packages/) — TypeScript reference components
 - [`docs/design/architecture.md`](docs/design/architecture.md) — architecture overview
+- [`docs/design/product-architecture.md`](docs/design/product-architecture.md) — a3t product system design
+- [`docs/design/implementation-plan.md`](docs/design/implementation-plan.md) — phased build-out plan
+- [`docs/design/ecosystem-context.md`](docs/design/ecosystem-context.md) — what the estate already provides and what a3t reuses
 - [`docs/landscape.md`](docs/landscape.md) — standards and adapter landscape
 - [`docs/roadmap.md`](docs/roadmap.md) — staged implementation roadmap
 - [`SECURITY.md`](SECURITY.md) — security policy and threat boundaries
