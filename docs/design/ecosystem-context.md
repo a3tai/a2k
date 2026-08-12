@@ -41,6 +41,12 @@ Consequence: the tray app is Wails (Go + Svelte 5), not Tauri, reusing that desi
 `a3tai/skills` holds 5 unversioned, unsigned SKILL.md dirs targeting OpenClaw; the estate audit in `a3tai/docs` counts 113 SKILL.md files across repos with heavy duplication (baseline, git-commit, linear-workflow, researcher recur per repo).
 That duplication is the concrete case for the defaults registry: skills become signed `.kpkg` artifacts (`runtime.type: skill` added to `a3t.dev/v1`) referenced by A2K catalog records with digests, replacing per-repo copies.
 
+## The home lab as the first organization
+
+The founder's personal estate (Mac + tailnet home servers) is the proving ground: it already runs an OIDC-fronted agent gateway, a filtering egress proxy with human-in-the-loop approvals over chat, Vault-brokered short-lived secrets, Zikra, and multiple coding agents, all glued by hand.
+Patterns to adopt from it rather than reinvent: the interactive egress-approval flow (unknown domain, agent paused, human taps allow/deny) as a Hub capability; hook-injected session context as the pre-manifest ancestor of `a3t context`; 1Password-plus-direnv as the local secret spine the broker must compose with, not replace.
+Its pain is the product's pitch in miniature: the same MCP server set declared six times in six syntaxes across configs, three parallel secret systems, identity unified on the platform side but absent at home, and no machine-readable inventory anywhere; the first real `facts` documents describe this estate.
+
 ## Naming and collision notes
 
 - `a3tai/docs` maps a root named `registry` (repository governance); the artifact registry is therefore always called the **defaults registry** in product docs.
