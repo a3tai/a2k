@@ -1,4 +1,4 @@
-import { chmod, lstat, mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { chmod, lstat, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -10,6 +10,7 @@ const MAX_RESPONSE_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MS = 15_000;
 const STATE_LOCK_TIMEOUT_MS = 10_000;
 const STATE_LOCK_RETRY_MS = 25;
+const STATE_LOCK_STALE_MS = 60_000;
 
 export type FetchLike = typeof fetch;
 
@@ -327,6 +328,50 @@ async function writeState(state: CliState, stateDir = defaultStateDir()): Promis
   }
 }
 
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+async function reclaimStaleLock(lockPath: string): Promise<boolean> {
+  let info;
+  try {
+    info = await lstat(lockPath);
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT";
+  }
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error("a3t state lock must be a regular directory");
+  }
+
+  let createdAt = info.mtimeMs;
+  let pid: number | undefined;
+  try {
+    const owner = JSON.parse(await readFile(join(lockPath, "owner.json"), "utf8")) as {
+      pid?: unknown;
+      createdAt?: unknown;
+    };
+    if (typeof owner.createdAt === "number" && Number.isFinite(owner.createdAt)) createdAt = owner.createdAt;
+    if (typeof owner.pid === "number" && Number.isInteger(owner.pid) && owner.pid > 0) pid = owner.pid;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
+  }
+  if (Date.now() - createdAt < STATE_LOCK_STALE_MS || (pid !== undefined && processIsAlive(pid))) return false;
+
+  const quarantine = `${lockPath}.stale-${process.pid}-${Date.now()}`;
+  try {
+    await rename(lockPath, quarantine);
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT";
+  }
+  await rm(quarantine, { recursive: true, force: true });
+  return true;
+}
+
 async function updateState(
   stateDir = defaultStateDir(),
   update: (state: CliState) => CliState | Promise<CliState>,
@@ -337,9 +382,15 @@ async function updateState(
   for (;;) {
     try {
       await mkdir(lockPath, { mode: 0o700 });
+      await writeFile(join(lockPath, "owner.json"), JSON.stringify({ pid: process.pid, createdAt: Date.now() }), {
+        encoding: "utf8",
+        mode: 0o600,
+      });
       break;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST" || Date.now() >= deadline) throw error;
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      if (Date.now() >= deadline) throw error;
+      await reclaimStaleLock(lockPath);
       await new Promise<void>((done) => setTimeout(done, STATE_LOCK_RETRY_MS));
     }
   }

@@ -64,6 +64,7 @@ test("device login discovers endpoints and stores refreshed credentials privatel
 
     const pending = await beginDeviceLogin({ issuer: "https://id.a3t.dev", fetch });
     assert.equal(pending.userCode, "ABCD-EFGH");
+    assert.equal(pending.intervalSeconds, 1);
     assert.equal(pending.verificationUriComplete, "https://id.a3t.dev/oauth2/device/verify?user_code=ABCD-EFGH");
 
     await pollDeviceLogin(pending, { stateDir, fetch, sleep: async () => undefined });
@@ -180,6 +181,22 @@ test("device polling handles pending and slow_down without leaking token errors"
       sleep: async (milliseconds) => { waits.push(milliseconds); },
     });
     assert.deepEqual(waits, [1_000, 6_000]);
+  });
+});
+
+test("state updates recover a stale lock left by a terminated process", async () => {
+  await withStateDir(async (stateDir) => {
+    const lockPath = join(stateDir, "state.json.lock");
+    await mkdir(lockPath, { mode: 0o700 });
+    await writeFile(join(lockPath, "owner.json"), JSON.stringify({
+      pid: 99_999_999,
+      token: "terminated-process",
+      createdAt: Date.now() - 60_000,
+    }), "utf8");
+
+    await saveActiveProject("https://a3t.ai/a2k/projects/docs", stateDir);
+    const state = await loadState(stateDir);
+    assert.equal(state.activeProject, "https://a3t.ai/a2k/projects/docs");
   });
 });
 
