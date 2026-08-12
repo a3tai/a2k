@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { lstat, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+
+const execFileAsync = promisify(execFile);
 
 import {
   beginDeviceLogin,
@@ -64,6 +68,7 @@ test("device login discovers endpoints and stores refreshed credentials privatel
 
     const pending = await beginDeviceLogin({ issuer: "https://id.a3t.dev", fetch });
     assert.equal(pending.userCode, "ABCD-EFGH");
+    assert.equal(pending.intervalSeconds, 1);
     assert.equal(pending.verificationUriComplete, "https://id.a3t.dev/oauth2/device/verify?user_code=ABCD-EFGH");
 
     await pollDeviceLogin(pending, { stateDir, fetch, sleep: async () => undefined });
@@ -80,6 +85,27 @@ test("device login discovers endpoints and stores refreshed credentials privatel
     const persisted = await readFile(join(stateDir, "state.json"), "utf8");
     assert.doesNotMatch(persisted, /device-secret/);
   });
+});
+
+test("missing device interval keeps the five-second default", async () => {
+  const fetch: FetchLike = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/.well-known/openid-configuration")) {
+      return response(200, {
+        issuer: "https://id.a3t.dev/",
+        device_authorization_endpoint: "https://id.a3t.dev/oauth2/device/auth",
+        token_endpoint: "https://id.a3t.dev/oauth2/token",
+      });
+    }
+    return response(200, {
+      device_code: "device",
+      user_code: "CODE",
+      verification_uri: "https://id.a3t.dev/oauth2/device/verify",
+      expires_in: 60,
+    });
+  };
+  const pending = await beginDeviceLogin({ issuer: "https://id.a3t.dev", fetch });
+  assert.equal(pending.intervalSeconds, 5);
 });
 
 test("issuer path is placed after the OIDC discovery well-known path", async () => {
@@ -180,6 +206,53 @@ test("device polling handles pending and slow_down without leaking token errors"
       sleep: async (milliseconds) => { waits.push(milliseconds); },
     });
     assert.deepEqual(waits, [1_000, 6_000]);
+  });
+});
+
+test("state updates recover a stale lock left by a terminated process", async () => {
+  await withStateDir(async (stateDir) => {
+    const lockPath = join(stateDir, "state.json.lock");
+    await mkdir(lockPath, { mode: 0o700 });
+    await writeFile(join(lockPath, "owner.json"), JSON.stringify({
+      pid: 99_999_999,
+      token: "terminated-process",
+      createdAt: Date.now() - 60_000,
+    }), "utf8");
+
+    await saveActiveProject("https://a3t.ai/a2k/projects/docs", stateDir);
+    const state = await loadState(stateDir);
+    assert.equal(state.activeProject, "https://a3t.ai/a2k/projects/docs");
+  });
+});
+
+test("live and unsafe state locks are never reclaimed", async () => {
+  await withStateDir(async (stateDir) => {
+    const lockPath = join(stateDir, "state.json.lock");
+    let ownerIdentity: string | undefined;
+    if (process.platform === "darwin") {
+      ownerIdentity = (await execFileAsync("ps", ["-o", "lstart=", "-p", String(process.pid)])).stdout.trim();
+    } else if (process.platform === "linux") {
+      const procStat = await readFile(`/proc/${process.pid}/stat`, "utf8");
+      ownerIdentity = procStat.slice(procStat.lastIndexOf(")") + 1).trim().split(/\s+/)[19];
+    }
+    await mkdir(lockPath, { mode: 0o700 });
+    await writeFile(join(lockPath, "owner.json"), JSON.stringify({
+      pid: process.pid,
+      createdAt: Date.now() - 60_000,
+      ...(ownerIdentity === undefined ? {} : { instanceIdentity: ownerIdentity }),
+    }), "utf8");
+    await assert.rejects(saveActiveProject("https://a3t.ai/a2k/projects/live", stateDir), /EEXIST|timed out/);
+    assert.equal((await stat(lockPath)).isDirectory(), true);
+
+    await rm(lockPath, { recursive: true });
+    await symlink(join(stateDir, "target"), lockPath);
+    await assert.rejects(saveActiveProject("https://a3t.ai/a2k/projects/symlink", stateDir), /state lock/);
+    assert.equal((await lstat(lockPath)).isSymbolicLink(), true);
+
+    await rm(lockPath);
+    await writeFile(lockPath, "not a directory", "utf8");
+    await assert.rejects(saveActiveProject("https://a3t.ai/a2k/projects/file", stateDir), /state lock/);
+    assert.equal((await lstat(lockPath)).isFile(), true);
   });
 });
 

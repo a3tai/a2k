@@ -1,4 +1,6 @@
-import { chmod, lstat, mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { chmod, lstat, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -10,6 +12,8 @@ const MAX_RESPONSE_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MS = 15_000;
 const STATE_LOCK_TIMEOUT_MS = 10_000;
 const STATE_LOCK_RETRY_MS = 25;
+const STATE_LOCK_STALE_MS = 60_000;
+const execFileAsync = promisify(execFile);
 
 export type FetchLike = typeof fetch;
 
@@ -105,7 +109,6 @@ function discoveryURLForIssuer(issuer: URL): URL {
 }
 
 function normalizedInterval(value: unknown): number {
-  if (value === undefined) return 5;
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw new Error("device authorization returned an invalid polling interval");
   }
@@ -192,7 +195,7 @@ export async function beginDeviceLogin(options: DeviceLoginOptions = {}): Promis
     ? undefined
     : sameOriginEndpoint(device.verification_uri_complete, issuer, "complete verification URI");
   const expiresIn = Math.max(1, Math.min(device.expires_in, 3600));
-  const interval = normalizedInterval(device.interval);
+  const interval = normalizedInterval(device.interval ?? 5);
   return {
     issuer: issuer.toString(),
     clientId,
@@ -327,6 +330,122 @@ async function writeState(state: CliState, stateDir = defaultStateDir()): Promis
   }
 }
 
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+async function processInstanceIdentity(pid: number): Promise<string | undefined> {
+  if (process.platform === "linux") {
+    try {
+      const stat = await readFile(`/proc/${pid}/stat`, "utf8");
+      const fields = stat.slice(stat.lastIndexOf(")") + 1).trim().split(/\s+/);
+      return fields[19];
+    } catch {
+      return undefined;
+    }
+  }
+  if (process.platform === "darwin") {
+    try {
+      const result = await execFileAsync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8" });
+      const identity = result.stdout.trim();
+      return identity || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+async function lockIsStale(lockPath: string): Promise<boolean> {
+  let info;
+  try {
+    info = await lstat(lockPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error("a3t state lock must be a regular directory");
+  }
+
+  let createdAt = info.mtimeMs;
+  let pid: number | undefined;
+  let instanceIdentity: string | undefined;
+  try {
+    const parsed: unknown = JSON.parse(await readFile(join(lockPath, "owner.json"), "utf8"));
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const owner = parsed as { pid?: unknown; createdAt?: unknown; instanceIdentity?: unknown };
+      if (typeof owner.createdAt === "number" && Number.isFinite(owner.createdAt)) createdAt = owner.createdAt;
+      if (typeof owner.pid === "number" && Number.isInteger(owner.pid) && owner.pid > 0) pid = owner.pid;
+      if (typeof owner.instanceIdentity === "string" && owner.instanceIdentity !== "") {
+        instanceIdentity = owner.instanceIdentity;
+      }
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
+  }
+  if (Date.now() - createdAt < STATE_LOCK_STALE_MS) return false;
+  if (pid !== undefined) {
+    const liveIdentity = await processInstanceIdentity(pid);
+    if (liveIdentity !== undefined && instanceIdentity !== undefined) {
+      if (liveIdentity === instanceIdentity) return false;
+    } else if (processIsAlive(pid)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+async function reclaimStaleLock(lockPath: string): Promise<boolean> {
+  const recoveryPath = `${lockPath}.recovery`;
+  try {
+    await mkdir(recoveryPath, { mode: 0o700 });
+    try {
+      const instanceIdentity = await processInstanceIdentity(process.pid);
+      await writeFile(join(recoveryPath, "owner.json"), JSON.stringify({
+        pid: process.pid,
+        createdAt: Date.now(),
+        ...(instanceIdentity === undefined ? {} : { instanceIdentity }),
+      }), { encoding: "utf8", mode: 0o600 });
+    } catch (error) {
+      await rm(recoveryPath, { recursive: true, force: true }).catch(() => undefined);
+      throw error;
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    if (await lockIsStale(recoveryPath)) {
+      const quarantine = `${recoveryPath}.stale-${process.pid}-${Date.now()}`;
+      try {
+        await rename(recoveryPath, quarantine);
+        await rm(quarantine, { recursive: true, force: true });
+      } catch (recoveryError) {
+        if ((recoveryError as NodeJS.ErrnoException).code !== "ENOENT") throw recoveryError;
+      }
+    }
+    return false;
+  }
+
+  try {
+    // The recovery lease serializes the stale check and quarantine rename.
+    if (!(await lockIsStale(lockPath))) return false;
+    const quarantine = `${lockPath}.stale-${process.pid}-${Date.now()}`;
+    try {
+      await rename(lockPath, quarantine);
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "ENOENT";
+    }
+    await rm(quarantine, { recursive: true, force: true });
+    return true;
+  } finally {
+    await rm(recoveryPath, { recursive: true, force: true });
+  }
+}
+
 async function updateState(
   stateDir = defaultStateDir(),
   update: (state: CliState) => CliState | Promise<CliState>,
@@ -337,9 +456,25 @@ async function updateState(
   for (;;) {
     try {
       await mkdir(lockPath, { mode: 0o700 });
+      try {
+        const instanceIdentity = await processInstanceIdentity(process.pid);
+        await writeFile(join(lockPath, "owner.json"), JSON.stringify({
+          pid: process.pid,
+          createdAt: Date.now(),
+          ...(instanceIdentity === undefined ? {} : { instanceIdentity }),
+        }), {
+          encoding: "utf8",
+          mode: 0o600,
+        });
+      } catch (error) {
+        await rm(lockPath, { recursive: true, force: true }).catch(() => undefined);
+        throw error;
+      }
       break;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST" || Date.now() >= deadline) throw error;
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      if (Date.now() >= deadline) throw error;
+      await reclaimStaleLock(lockPath);
       await new Promise<void>((done) => setTimeout(done, STATE_LOCK_RETRY_MS));
     }
   }
