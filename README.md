@@ -21,6 +21,27 @@ A2K composes existing standards rather than replacing them. Git remains the revi
 
 Discovery is not trust, authorization, installation, or execution. A2K consumers must treat manifests, documents, remote references, adapter output, and model output as untrusted data. The reference implementation is read-only by default and produces proposed configuration changes for review rather than applying them.
 
+## CLI
+
+Install from source (Node.js >= 24 and git required):
+
+```bash
+curl -fsSL https://a2k.a3t.ai/install.sh | bash
+```
+
+The `a2k` CLI validates manifests, shows the directory-aware project context, plans reviewable client bootstrap configuration, and provides a direnv-style shell hook:
+
+```bash
+a2k context          # nearest validated .a2k/manifest.yaml, walking up from $PWD
+a2k validate         # validate a manifest
+a2k bootstrap        # print a reviewable client-config plan (--write to emit under .a2k/generated/)
+eval "$(a2k hook zsh)"   # in ~/.zshrc: exports A2K_* metadata on directory change
+```
+
+The hook exports metadata only (project id, name, kind, classification, paths).
+It never executes manifest content and never emits secrets.
+The broader product surface (central Hub, setup mode, signed defaults registry, desktop app) is defined in [RFC 0001](docs/rfcs/0001-product-surface.md).
+
 ## Repository map
 
 - [`spec/v0.1/`](spec/v0.1/) — draft normative specification

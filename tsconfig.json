@@ -1,10 +1,23 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/core" },
-    { "path": "./packages/validator" },
-    { "path": "./packages/bootstrap" },
-    { "path": "./packages/adapter-sdk" },
-    { "path": "./packages/mcp-server" }
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/cli"
+    },
+    {
+      "path": "./packages/validator"
+    },
+    {
+      "path": "./packages/bootstrap"
+    },
+    {
+      "path": "./packages/adapter-sdk"
+    },
+    {
+      "path": "./packages/mcp-server"
+    }
   ]
 }

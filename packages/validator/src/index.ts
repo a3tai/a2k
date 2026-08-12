@@ -215,3 +215,9 @@ export function validateManifestText(
 
   return { valid: true, manifest: value as A2kManifest, errors: [] };
 }
+
+export {
+  ManifestFileTooLargeError,
+  ManifestPathError,
+  readManifestFile,
+} from "./file.js";
