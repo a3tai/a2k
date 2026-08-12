@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 
 import { planBootstrap, type BootstrapTarget } from "@a2k/bootstrap";
 import { A2K_MANIFEST_PATH } from "@a2k/core";
@@ -12,6 +10,7 @@ import {
   validateManifestText,
 } from "@a2k/validator";
 
+import { writeBootstrapPlan } from "./bootstrap-write.js";
 import {
   hookScript,
   loadContext,
@@ -27,7 +26,7 @@ a3t is the A3T tool; it speaks the A2K knowledge protocol.
 Commands:
   validate [path]                    Validate a manifest (default: ${A2K_MANIFEST_PATH})
   context [--json]                   Show the manifest context for the current directory
-  bootstrap [--target <t>] [--write] Plan client configuration (targets: claude-code, codex)
+  bootstrap [--target <t>] [--write <digest>] Plan or apply client configuration (targets: claude-code, opencode, pi, codex, vscode, cursor)
   export                             Emit shell exports for the current context
   hook <zsh|bash>                    Emit the shell hook (add 'eval "$(a3t hook zsh)"' to your rc file)
 `;
@@ -104,15 +103,28 @@ async function cmdContext(args: string[]): Promise<number> {
   return 0;
 }
 
-const BOOTSTRAP_TARGETS: readonly BootstrapTarget[] = ["claude-code", "codex"];
+const BOOTSTRAP_TARGETS: readonly BootstrapTarget[] = [
+  "claude-code",
+  "opencode",
+  "pi",
+  "codex",
+  "vscode",
+  "cursor",
+];
 
 async function cmdBootstrap(args: string[]): Promise<number> {
   const targets: BootstrapTarget[] = [];
-  let write = false;
+  let approvedDigest: string | null = null;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--write") {
-      write = true;
+      const value = args[index + 1];
+      index += 1;
+      if (!value?.startsWith("sha256:")) {
+        console.error("--write requires the sha256 approvalDigest from the reviewed plan");
+        return 2;
+      }
+      approvedDigest = value;
     } else if (arg === "--target") {
       const value = args[index + 1];
       index += 1;
@@ -135,19 +147,24 @@ async function cmdBootstrap(args: string[]): Promise<number> {
   }
 
   const plan = planBootstrap(result.context.manifest, { targets });
-  if (!write) {
+  if (approvedDigest === null) {
     process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
-    console.error("Plan only. Re-run with --write to write proposed files under .a2k/generated/.");
+    console.error(`Plan only. Review the complete output, then re-run with --write ${plan.approvalDigest} to create these exact files.`);
     return 0;
   }
 
-  for (const change of plan.changes) {
-    const destination = join(result.context.dir, change.path);
-    await mkdir(dirname(destination), { recursive: true });
-    await writeFile(destination, change.content, "utf8");
-    console.log(`wrote ${destination}`);
+  try {
+    const destinations = await writeBootstrapPlan(
+      result.context.dir,
+      plan,
+      approvedDigest,
+    );
+    for (const destination of destinations) console.log(`wrote ${destination}`);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : "Bootstrap files could not be written");
+    return 1;
   }
-  console.log("Proposed configuration written. Nothing is activated until you wire it into your client.");
+  console.log("Approved client configuration written.");
   return 0;
 }
 

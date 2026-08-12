@@ -35,7 +35,8 @@ The `a3t` CLI validates manifests, shows the directory-aware project context, pl
 ```bash
 a3t context          # nearest validated .a2k/manifest.yaml, walking up from $PWD
 a3t validate         # validate a manifest
-a3t bootstrap        # print a reviewable client-config plan (--write to emit under .a2k/generated/)
+a3t bootstrap --target claude-code --target pi  # review native files and note approvalDigest
+a3t bootstrap --target claude-code --target pi --write sha256:<reviewed-digest>
 eval "$(a3t hook zsh)"   # in ~/.zshrc: exports A2K_* metadata on directory change
 ```
 

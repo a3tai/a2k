@@ -12,10 +12,11 @@
       "enum": ["OrganizationHub", "PrivateOverlay", "ProjectBootstrap"]
     },
     "metadata": { "$ref": "#/$defs/metadata" },
-    "spec": { "$ref": "#/$defs/spec" }
+    "spec": { "$ref": "#/$defs/spec" },
+    "x-connectors": { "$ref": "#/$defs/connectors" }
   },
   "patternProperties": {
-    "^x-[a-z0-9][a-z0-9.-]*$": { "$ref": "#/$defs/extensionValue" }
+    "^x-(?!connectors$)[a-z0-9][a-z0-9.-]*$": { "$ref": "#/$defs/extensionValue" }
   },
   "additionalProperties": false,
   "allOf": [
@@ -52,6 +53,94 @@
     "digest": {
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "credentialBinding": {
+      "type": "object",
+      "required": ["env", "op"],
+      "properties": {
+        "env": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)$",
+          "maxLength": 128
+        },
+        "op": {
+          "type": "string",
+          "pattern": "^op://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+$",
+          "maxLength": 512
+        },
+        "scheme": { "const": "bearer" }
+      },
+      "additionalProperties": false
+    },
+    "mcpValue": {
+      "anyOf": [
+        { "type": "string", "maxLength": 1024 },
+        { "$ref": "#/$defs/credentialBinding" }
+      ]
+    },
+    "mcpValueMap": {
+      "type": "object",
+      "maxProperties": 64,
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "additionalProperties": { "$ref": "#/$defs/mcpValue" }
+    },
+    "mcpStdioServer": {
+      "type": "object",
+      "required": ["transport", "command"],
+      "properties": {
+        "transport": { "const": "stdio" },
+        "command": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "args": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "type": "string", "maxLength": 512 }
+        },
+        "env": { "$ref": "#/$defs/mcpValueMap" }
+      },
+      "additionalProperties": false
+    },
+    "mcpHttpServer": {
+      "type": "object",
+      "required": ["transport", "url"],
+      "properties": {
+        "transport": { "const": "http" },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 2048
+        },
+        "auth": { "const": "oauth" },
+        "headers": { "$ref": "#/$defs/mcpValueMap" }
+      },
+      "additionalProperties": false
+    },
+    "mcpServer": {
+      "oneOf": [
+        { "$ref": "#/$defs/mcpStdioServer" },
+        { "$ref": "#/$defs/mcpHttpServer" }
+      ]
+    },
+    "connectors": {
+      "type": "object",
+      "required": ["mcpServers"],
+      "properties": {
+        "mcpServers": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 64,
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9._-]{0,62}$"
+          },
+          "additionalProperties": { "$ref": "#/$defs/mcpServer" }
+        }
+      },
+      "additionalProperties": false
     },
     "metadata": {
       "type": "object",

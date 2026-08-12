@@ -144,7 +144,7 @@ Existing project management stays connected read-only through the Linear/Jira/Gi
 
 - The CLI owns all local state under `~/.a3t` (token store, active project, cached bundle verification keys).
 - The shell hook exports validated `A2K_*` metadata only and works fully offline; Hub outage degrades to local-manifest behavior, never to a broken shell.
-- `a3t bootstrap` and `a3t setup` write only reviewable output under `.a2k/generated/` or user-approved config paths.
+- `a3t bootstrap` and `a3t setup` print the complete plan first and bind writes to its reviewed digest; bootstrap also refuses to replace an existing client file or follow a symlinked destination parent.
 - The desktop tray app renders CLI state and Hub status; every action it offers is a CLI command.
 
 ## Any-agent surface
@@ -222,7 +222,7 @@ One internal server model, four config carriers, emitted by the bootstrap planne
 | Editor | File | Envelope | Plan |
 |---|---|---|---|
 | VS Code | `.vscode/mcp.json` | `servers`, `"type": "http"` | repo plan |
-| Claude Code | `.mcp.json` | `mcpServers`, `"type": "http"` | repo plan |
+| Claude Code | `.claude/mcp.json` | `mcpServers`, `"type": "http"` | repo plan |
 | Cursor | `.cursor/mcp.json` | `mcpServers`, `url` | repo plan |
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` | `mcpServers`, `serverUrl` | machine plan (`a3t setup`), merge by server name |
 

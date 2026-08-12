@@ -10,7 +10,56 @@ metadata:
   classification: internal
 spec:
   roots: []
-  profiles: [core, bootstrap]
+  profiles: [core, bootstrap, mcp]
   policy:
     remoteFetch: disabled
     mutation: proposal
+x-connectors:
+  mcpServers:
+    context7:
+      transport: http
+      url: https://mcp.context7.com/mcp
+      headers:
+        CONTEXT7_API_KEY:
+          env: CONTEXT7_API_KEY
+          op: op://KarunaBot/Environment/MCP/CONTEXT7_API_KEY
+    exa:
+      transport: http
+      url: https://mcp.exa.ai/mcp
+      headers:
+        Authorization:
+          env: EXA_API_KEY
+          op: op://KarunaBot/Environment/MCP/EXA_API_KEY
+          scheme: bearer
+    firecrawl:
+      transport: stdio
+      command: npx
+      args: [-y, firecrawl-mcp]
+      env:
+        FIRECRAWL_API_KEY:
+          env: FIRECRAWL_API_KEY
+          op: op://KarunaBot/Environment/MCP/FIRECRAWL_API_KEY
+    linear:
+      transport: stdio
+      command: npx
+      args: [-y, "@linear/mcp-server"]
+      env:
+        LINEAR_API_KEY:
+          env: LINEAR_API_KEY
+          op: op://KarunaBot/Environment/MCP/LINEAR_API_KEY
+    notion:
+      transport: stdio
+      command: npx
+      args: [-y, "@notionhq/notion-mcp-server"]
+      env:
+        NOTION_TOKEN:
+          env: NOTION_API_KEY
+          op: op://KarunaBot/Environment/MCP/NOTION_API_KEY
+    tavily:
+      transport: http
+      url: https://mcp.tavily.com/mcp/
+      headers:
+        Authorization:
+          env: TAVILY_API_KEY
+          op: op://KarunaBot/Environment/MCP/TAVILY_API_KEY
+          scheme: bearer
