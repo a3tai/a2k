@@ -42,6 +42,8 @@ eval "$(a3t hook zsh)"   # in ~/.zshrc: exports A2K_* metadata on directory chan
 
 The hook exports metadata only (project id, name, kind, classification, paths); the variables are named `A2K_*` because they carry protocol context.
 It never executes manifest content and never emits secrets.
+For a complete collaborator setup, including the shell hook, manifest verification, review-first agent configuration, and safe verification, follow [`ONBOARDING.md`](ONBOARDING.md).
+
 The broader product surface (central Hub, setup mode, signed defaults registry, desktop app) is defined in [RFC 0001](docs/rfcs/0001-product-surface.md), with the full design in [`docs/design/product-architecture.md`](docs/design/product-architecture.md) and the build-out sequence in [`docs/design/implementation-plan.md`](docs/design/implementation-plan.md).
 
 ## Repository map
