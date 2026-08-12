@@ -228,9 +228,13 @@ test("state updates recover a stale lock left by a terminated process", async ()
 test("live and unsafe state locks are never reclaimed", async () => {
   await withStateDir(async (stateDir) => {
     const lockPath = join(stateDir, "state.json.lock");
-    const ownerIdentity = process.platform === "darwin"
-      ? (await execFileAsync("ps", ["-o", "lstart=", "-p", String(process.pid)])).stdout.trim()
-      : undefined;
+    let ownerIdentity: string | undefined;
+    if (process.platform === "darwin") {
+      ownerIdentity = (await execFileAsync("ps", ["-o", "lstart=", "-p", String(process.pid)])).stdout.trim();
+    } else if (process.platform === "linux") {
+      const procStat = await readFile(`/proc/${process.pid}/stat`, "utf8");
+      ownerIdentity = procStat.slice(procStat.lastIndexOf(")") + 1).trim().split(/\s+/)[19];
+    }
     await mkdir(lockPath, { mode: 0o700 });
     await writeFile(join(lockPath, "owner.json"), JSON.stringify({
       pid: process.pid,

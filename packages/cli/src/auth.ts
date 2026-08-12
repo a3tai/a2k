@@ -362,12 +362,13 @@ async function processInstanceIdentity(pid: number): Promise<string | undefined>
   return undefined;
 }
 
-async function reclaimStaleLock(lockPath: string): Promise<boolean> {
+async function lockIsStale(lockPath: string): Promise<boolean> {
   let info;
   try {
     info = await lstat(lockPath);
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "ENOENT";
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
   }
   if (!info.isDirectory() || info.isSymbolicLink()) {
     throw new Error("a3t state lock must be a regular directory");
@@ -398,15 +399,52 @@ async function reclaimStaleLock(lockPath: string): Promise<boolean> {
       return false;
     }
   }
-
-  const quarantine = `${lockPath}.stale-${process.pid}-${Date.now()}`;
-  try {
-    await rename(lockPath, quarantine);
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "ENOENT";
-  }
-  await rm(quarantine, { recursive: true, force: true });
   return true;
+}
+
+async function reclaimStaleLock(lockPath: string): Promise<boolean> {
+  const recoveryPath = `${lockPath}.recovery`;
+  try {
+    await mkdir(recoveryPath, { mode: 0o700 });
+    try {
+      const instanceIdentity = await processInstanceIdentity(process.pid);
+      await writeFile(join(recoveryPath, "owner.json"), JSON.stringify({
+        pid: process.pid,
+        createdAt: Date.now(),
+        ...(instanceIdentity === undefined ? {} : { instanceIdentity }),
+      }), { encoding: "utf8", mode: 0o600 });
+    } catch (error) {
+      await rm(recoveryPath, { recursive: true, force: true }).catch(() => undefined);
+      throw error;
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    if (await lockIsStale(recoveryPath)) {
+      const quarantine = `${recoveryPath}.stale-${process.pid}-${Date.now()}`;
+      try {
+        await rename(recoveryPath, quarantine);
+        await rm(quarantine, { recursive: true, force: true });
+      } catch (recoveryError) {
+        if ((recoveryError as NodeJS.ErrnoException).code !== "ENOENT") throw recoveryError;
+      }
+    }
+    return false;
+  }
+
+  try {
+    // The recovery lease serializes the stale check and quarantine rename.
+    if (!(await lockIsStale(lockPath))) return false;
+    const quarantine = `${lockPath}.stale-${process.pid}-${Date.now()}`;
+    try {
+      await rename(lockPath, quarantine);
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "ENOENT";
+    }
+    await rm(quarantine, { recursive: true, force: true });
+    return true;
+  } finally {
+    await rm(recoveryPath, { recursive: true, force: true });
+  }
 }
 
 async function updateState(
