@@ -1,4 +1,6 @@
+import { execFile } from "node:child_process";
 import { chmod, lstat, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -11,6 +13,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const STATE_LOCK_TIMEOUT_MS = 10_000;
 const STATE_LOCK_RETRY_MS = 25;
 const STATE_LOCK_STALE_MS = 60_000;
+const execFileAsync = promisify(execFile);
 
 export type FetchLike = typeof fetch;
 
@@ -337,6 +340,28 @@ function processIsAlive(pid: number): boolean {
   }
 }
 
+async function processInstanceIdentity(pid: number): Promise<string | undefined> {
+  if (process.platform === "linux") {
+    try {
+      const stat = await readFile(`/proc/${pid}/stat`, "utf8");
+      const fields = stat.slice(stat.lastIndexOf(")") + 1).trim().split(/\\s+/);
+      return fields[19];
+    } catch {
+      return undefined;
+    }
+  }
+  if (process.platform === "darwin") {
+    try {
+      const result = await execFileAsync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8" });
+      const identity = result.stdout.trim();
+      return identity || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 async function reclaimStaleLock(lockPath: string): Promise<boolean> {
   let info;
   try {
@@ -350,17 +375,29 @@ async function reclaimStaleLock(lockPath: string): Promise<boolean> {
 
   let createdAt = info.mtimeMs;
   let pid: number | undefined;
+  let instanceIdentity: string | undefined;
   try {
-    const owner = JSON.parse(await readFile(join(lockPath, "owner.json"), "utf8")) as {
-      pid?: unknown;
-      createdAt?: unknown;
-    };
-    if (typeof owner.createdAt === "number" && Number.isFinite(owner.createdAt)) createdAt = owner.createdAt;
-    if (typeof owner.pid === "number" && Number.isInteger(owner.pid) && owner.pid > 0) pid = owner.pid;
+    const parsed: unknown = JSON.parse(await readFile(join(lockPath, "owner.json"), "utf8"));
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const owner = parsed as { pid?: unknown; createdAt?: unknown; instanceIdentity?: unknown };
+      if (typeof owner.createdAt === "number" && Number.isFinite(owner.createdAt)) createdAt = owner.createdAt;
+      if (typeof owner.pid === "number" && Number.isInteger(owner.pid) && owner.pid > 0) pid = owner.pid;
+      if (typeof owner.instanceIdentity === "string" && owner.instanceIdentity !== "") {
+        instanceIdentity = owner.instanceIdentity;
+      }
+    }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
   }
-  if (Date.now() - createdAt < STATE_LOCK_STALE_MS || (pid !== undefined && processIsAlive(pid))) return false;
+  if (Date.now() - createdAt < STATE_LOCK_STALE_MS) return false;
+  if (pid !== undefined) {
+    const liveIdentity = await processInstanceIdentity(pid);
+    if (liveIdentity !== undefined && instanceIdentity !== undefined) {
+      if (liveIdentity === instanceIdentity) return false;
+    } else if (processIsAlive(pid)) {
+      return false;
+    }
+  }
 
   const quarantine = `${lockPath}.stale-${process.pid}-${Date.now()}`;
   try {
@@ -382,10 +419,20 @@ async function updateState(
   for (;;) {
     try {
       await mkdir(lockPath, { mode: 0o700 });
-      await writeFile(join(lockPath, "owner.json"), JSON.stringify({ pid: process.pid, createdAt: Date.now() }), {
-        encoding: "utf8",
-        mode: 0o600,
-      });
+      try {
+        const instanceIdentity = await processInstanceIdentity(process.pid);
+        await writeFile(join(lockPath, "owner.json"), JSON.stringify({
+          pid: process.pid,
+          createdAt: Date.now(),
+          ...(instanceIdentity === undefined ? {} : { instanceIdentity }),
+        }), {
+          encoding: "utf8",
+          mode: 0o600,
+        });
+      } catch (error) {
+        await rm(lockPath, { recursive: true, force: true }).catch(() => undefined);
+        throw error;
+      }
       break;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;

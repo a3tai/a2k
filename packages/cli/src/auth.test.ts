@@ -83,6 +83,27 @@ test("device login discovers endpoints and stores refreshed credentials privatel
   });
 });
 
+test("missing device interval keeps the five-second default", async () => {
+  const fetch: FetchLike = async (input) => {
+    const url = String(input);
+    if (url.endsWith("/.well-known/openid-configuration")) {
+      return response(200, {
+        issuer: "https://id.a3t.dev/",
+        device_authorization_endpoint: "https://id.a3t.dev/oauth2/device/auth",
+        token_endpoint: "https://id.a3t.dev/oauth2/token",
+      });
+    }
+    return response(200, {
+      device_code: "device",
+      user_code: "CODE",
+      verification_uri: "https://id.a3t.dev/oauth2/device/verify",
+      expires_in: 60,
+    });
+  };
+  const pending = await beginDeviceLogin({ issuer: "https://id.a3t.dev", fetch });
+  assert.equal(pending.intervalSeconds, 5);
+});
+
 test("issuer path is placed after the OIDC discovery well-known path", async () => {
   const requests: string[] = [];
   const fetch: FetchLike = async (input) => {
