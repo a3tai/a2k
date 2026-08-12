@@ -1,0 +1,25 @@
+{
+  "name": "a2k",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Agent-to-Knowledge specification and reference implementation",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "npm@11.9.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "workspaces": [
+    "schemas",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test": "npm run build && node --test packages/*/dist/*.test.js",
+    "check": "npm test"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.13",
+    "typescript": "7.0.2"
+  }
+}

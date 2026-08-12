@@ -1,0 +1,13 @@
+apiVersion: a2k.a3t.ai/v0alpha1
+kind: ProjectBootstrap
+metadata:
+  id: https://example.com/a2k/projects/unsafe-uri
+  name: unsafe-uri
+  owners: [https://user:password@example.com/teams/maintainers]
+  classification: internal
+spec:
+  roots: []
+  profiles: [core]
+  policy:
+    remoteFetch: disabled
+    mutation: deny

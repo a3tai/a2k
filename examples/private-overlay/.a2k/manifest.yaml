@@ -1,0 +1,22 @@
+$schema: https://a3t.ai/a2k/schemas/v0.1/manifest.schema.json
+apiVersion: a2k.a3t.ai/v0alpha1
+kind: PrivateOverlay
+metadata:
+  id: https://example.com/a2k/organizations/example/private
+  name: example-private
+  title: Restricted organization overlay
+  owners:
+    - https://example.com/teams/knowledge-stewards
+  classification: restricted
+spec:
+  roots:
+    - id: restricted-docs
+      path: restricted
+      classification: restricted
+  profiles: [core, governance, identity, mcp]
+  policy:
+    remoteFetch: disabled
+    mutation: approval-required
+  overlay:
+    baseId: https://example.com/a2k/organizations/example
+    baseDigest: sha256:0000000000000000000000000000000000000000000000000000000000000000

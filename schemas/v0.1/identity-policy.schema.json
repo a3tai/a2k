@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a3t.ai/a2k/schemas/v0.1/identity-policy.schema.json",
+  "title": "A2K OAuth/OIDC identity policy",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "a2k.a3t.ai/v0alpha1" },
+    "kind": { "const": "IdentityPolicy" },
+    "metadata": {
+      "type": "object",
+      "required": ["id", "owner"],
+      "properties": {
+        "id": { "type": "string", "format": "uri" },
+        "owner": { "type": "string", "format": "uri" }
+      },
+      "additionalProperties": false
+    },
+    "spec": {
+      "type": "object",
+      "required": ["issuer", "audiences", "scopes", "principalClasses", "delegation"],
+      "properties": {
+        "issuer": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "audiences": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 256 }
+        },
+        "scopes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^a2k:(discover|read|propose|review|approve|administer|audit)$"
+          }
+        },
+        "principalClasses": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["human", "agent", "workload"] }
+        },
+        "delegation": {
+          "type": "object",
+          "required": ["scopeAttenuation", "maxDepth"],
+          "properties": {
+            "scopeAttenuation": { "const": "required" },
+            "maxDepth": { "type": "integer", "minimum": 0, "maximum": 8 },
+            "humanApprovalFor": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "enum": ["approve", "administer"] }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

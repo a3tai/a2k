@@ -1,0 +1,13 @@
+apiVersion: a2k.a3t.ai/v0alpha1
+kind: PrivateOverlay
+metadata:
+  id: https://example.com/a2k/organizations/example/private
+  name: unbound-overlay
+  owners: [https://example.com/teams/maintainers]
+  classification: restricted
+spec:
+  roots: []
+  profiles: [core]
+  policy:
+    remoteFetch: disabled
+    mutation: approval-required

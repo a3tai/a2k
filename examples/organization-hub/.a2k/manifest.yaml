@@ -1,0 +1,30 @@
+$schema: https://a3t.ai/a2k/schemas/v0.1/manifest.schema.json
+apiVersion: a2k.a3t.ai/v0alpha1
+kind: OrganizationHub
+metadata:
+  id: https://example.com/a2k/organizations/example
+  name: example
+  title: Example organization knowledge hub
+  owners:
+    - https://example.com/teams/knowledge-stewards
+  classification: public
+spec:
+  roots:
+    - id: public-docs
+      path: docs
+      classification: public
+  references:
+    - id: engineering-catalog
+      type: catalog
+      uri: https://example.com/catalog
+      classification: public
+  profiles:
+    - core
+    - governance
+    - knowledge-adapters
+    - a2a
+    - acp
+    - agent-skills
+  policy:
+    remoteFetch: disabled
+    mutation: proposal

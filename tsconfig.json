@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/validator" },
+    { "path": "./packages/bootstrap" },
+    { "path": "./packages/adapter-sdk" },
+    { "path": "./packages/mcp-server" }
+  ]
+}

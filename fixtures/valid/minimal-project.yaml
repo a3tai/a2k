@@ -1,0 +1,13 @@
+apiVersion: a2k.a3t.ai/v0alpha1
+kind: ProjectBootstrap
+metadata:
+  id: https://example.com/a2k/projects/minimal
+  name: minimal
+  owners: [https://example.com/teams/maintainers]
+  classification: internal
+spec:
+  roots: []
+  profiles: [core]
+  policy:
+    remoteFetch: disabled
+    mutation: deny

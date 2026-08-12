@@ -1,0 +1,22 @@
+{
+  "name": "@a2k/validator",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "a2k": "./dist/cli.js"
+  },
+  "dependencies": {
+    "@a2k/core": "*",
+    "@a2k/schemas": "*",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "yaml": "2.9.0"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  }
+}

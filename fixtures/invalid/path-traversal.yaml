@@ -1,0 +1,16 @@
+apiVersion: a2k.a3t.ai/v0alpha1
+kind: ProjectBootstrap
+metadata:
+  id: https://example.com/a2k/projects/unsafe-path
+  name: unsafe-path
+  owners: [https://example.com/teams/maintainers]
+  classification: internal
+spec:
+  roots:
+    - id: outside
+      path: ../private
+      classification: restricted
+  profiles: [core]
+  policy:
+    remoteFetch: disabled
+    mutation: deny

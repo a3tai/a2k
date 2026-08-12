@@ -1,0 +1,25 @@
+$schema: https://a3t.ai/a2k/schemas/v0.1/manifest.schema.json
+apiVersion: a2k.a3t.ai/v0alpha1
+kind: ProjectBootstrap
+metadata:
+  id: https://example.com/a2k/projects/widget
+  name: widget
+  title: Widget project knowledge
+  owners:
+    - https://example.com/teams/platform
+  classification: internal
+spec:
+  roots:
+    - id: docs
+      path: docs
+      classification: internal
+      kinds: [adr, runbook, specification]
+  references:
+    - id: public-api
+      type: documentation
+      uri: https://example.com/docs/widget
+      classification: public
+  profiles: [core, governance, bootstrap, mcp]
+  policy:
+    remoteFetch: disabled
+    mutation: proposal

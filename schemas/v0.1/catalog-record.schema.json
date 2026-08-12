@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a3t.ai/a2k/schemas/v0.1/catalog-record.schema.json",
+  "title": "A2K logical catalog record",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "a2k.a3t.ai/v0alpha1" },
+    "kind": { "enum": ["Agent", "Skill", "Service", "KnowledgeSource"] },
+    "metadata": {
+      "type": "object",
+      "required": ["id", "name", "owner", "classification", "status"],
+      "properties": {
+        "id": { "type": "string", "format": "uri" },
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "owner": { "type": "string", "format": "uri" },
+        "classification": { "enum": ["public", "internal", "confidential", "restricted"] },
+        "status": { "enum": ["draft", "active", "deprecated", "invalidated", "archived"] }
+      },
+      "additionalProperties": false
+    },
+    "spec": {
+      "type": "object",
+      "required": ["capabilities", "operations"],
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        },
+        "operations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["discover", "read", "propose", "review", "approve", "administer"] }
+        },
+        "protocols": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "required": ["name", "version", "descriptorUri"],
+            "properties": {
+              "name": { "enum": ["mcp", "a2a", "acp", "openapi", "asyncapi", "agent-skills"] },
+              "version": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "descriptorUri": { "type": "string", "format": "uri" },
+              "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "artifact": {
+          "type": "object",
+          "required": ["uri", "digest", "license"],
+          "properties": {
+            "uri": { "type": "string", "format": "uri" },
+            "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+            "license": { "type": "string", "minLength": 1, "maxLength": 100 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

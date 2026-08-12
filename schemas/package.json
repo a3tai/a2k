@@ -1,0 +1,14 @@
+{
+  "name": "@a2k/schemas",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./v0.1/adapter.schema.json": "./v0.1/adapter.schema.json",
+    "./v0.1/catalog-record.schema.json": "./v0.1/catalog-record.schema.json",
+    "./v0.1/contribution.schema.json": "./v0.1/contribution.schema.json",
+    "./v0.1/identity-policy.schema.json": "./v0.1/identity-policy.schema.json",
+    "./v0.1/manifest.schema.json": "./v0.1/manifest.schema.json"
+  }
+}
